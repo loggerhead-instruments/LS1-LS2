@@ -6,8 +6,10 @@
 // David Mann
 
 // To Do
-// Add 1 channel or 2 channel to menu
+// - Add 1 channel or 2 channel to menu
+// - Add number of battery packs to menu
 // - battery calculator use current draw estimate based on sample rate
+
 // - test continuous record
 // - test 60s rec 60s sleep 1 day
 // - round seconds to 60
@@ -26,7 +28,7 @@
 char codeVersion[5] = "2.00";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
-int roundSeconds = 10;//start time modulo to nearest roundSeconds
+int roundSeconds = 60;//start time modulo to nearest roundSeconds
 int wakeahead = 5;  //wake from snooze to give hydrophone to power up
 int noDC = 0; // 0 = freezeDC offset; 1 = remove DC offset; 2 = bypass
 #define NCHAN 2
@@ -304,7 +306,6 @@ void setup() {
   if(rec_int >= 300) roundSeconds = 300;
   
   t = getTeensy3Time(1);  // sync teensy rtc to DS3231
-  
   startTime = t;
   startTime -= startTime % roundSeconds;  
   startTime += roundSeconds; //move forward
@@ -659,10 +660,12 @@ time_t getTeensy3Time(boolean syncTeensy)
 {
   if(readRTC()){
     if(syncTeensy) setTeensyTime(hour(t),minute(t),second(t),day(t),month(t),year(t)); // sync from DS3231 to Teensy time
-    return t;  // DS3231 read successful
-  }else{
-    return Teensy3Clock.get();  // fall back to Teensy internal clock
+    return t;
   }
+  else{
+    return Teensy3Clock.get();  // return Teensy internal clock
+  }
+  
 }
 
 void resetFunc(void){

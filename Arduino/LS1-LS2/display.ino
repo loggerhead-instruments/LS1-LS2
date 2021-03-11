@@ -1,7 +1,29 @@
-float mAmpRec = 95;  // 300 kHz: SanDisk 128 GB: 75 mA; 8 kHz: 53 mA; 2 mA if pull microSD; SanDisk 1 TB: 300 kHz:95 mA 8 kHz: 37 mA; 3.8 mA sleep
-float mAmpSleep = 3.8; // 300 kHz: 18 mA; 8 kHz: 18 mA (17 mA second sleep)
+float mAmpRec = 95;  
+float mAmpSleep = 4.2; 
 byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
+
+// stereo record power consumption 1 TB SanDisk exFAT; sleep 4.2 mA
+// 8 kHz = 36 mA
+// 16 kHz = 38 mA
+// 32 kHz = 43 mA
+// 44.1 kHz = 47 mA
+// 48 kHz = 48 mA
+// 96 kHz = 62 mA
+// 200 kHz = 90 mA
+// 250 kHz = 100 mA
+// 300 kHz = 107 mA
+
+// stereo record power consumption 256 GB Samsung exFAT; 14 mA sleep
+// 8 kHz = 46 mA
+// 16 kHz = 46 mA
+// 32 kHz = 48 mA
+// 44.1 kHz = 49 mA
+// 48 kHz = 49 mA
+// 96 kHz = 53 mA
+// 200 kHz = 60 mA
+// 250 kHz = 64 mA
+// 300 kHz = 67 mA
 
 csd_t m_csd;
 
@@ -178,7 +200,7 @@ void manualSettings(){
    while(startRec==0){
     static int newYear, newMonth, newDay, newHour, newMinute, newSecond, oldYear, oldMonth, oldDay, oldHour, oldMinute, oldSecond;
     t = getTeensy3Time(0);
-    if (t - autoStartTime > 600) startRec = 1; //autostart if no activity for 10 minutes
+  //  if (t - autoStartTime > 600) startRec = 1; //autostart if no activity for 10 minutes
     
     // Check for button press
     boolean selectVal = digitalRead(UP);
@@ -222,6 +244,7 @@ void manualSettings(){
             display.setTextSize(1);
             display.print("Press UP+DN to Stop");
             display.display();
+            getTeensy3Time(1); // sync Teensy clock to DS3231
             delay(2000);
             startRec = 1;  //start recording 
             break;
@@ -296,8 +319,11 @@ void manualSettings(){
             oldYear = year(t);
             newYear = updateVal(oldYear,2000, 2100);
             if(oldYear!=newYear){
-              setTime2(hour(t), minute(t), second(t), day(t), month(t), newYear - 2000);
+//              Serial.print("Old year "); Serial.println(oldYear);
+//              Serial.print("New year "); Serial.println(newYear);
+              setTime2(hour(t), minute(t), second(t), day(t), month(t), newYear - 2000U);
               autoStartTime = getTeensy3Time(0);
+//              Serial.print("After set Year "); Serial.println(year(t));
             }
             cDisplay();
             display.println("Year:");
@@ -314,7 +340,7 @@ void manualSettings(){
             oldMonth = month(t);
             newMonth = updateVal(oldMonth, 1, 12);
             if(oldMonth != newMonth){
-              setTime2(hour(t), minute(t), second(t), day(t), newMonth, year(t));
+              setTime2(hour(t), minute(t), second(t), day(t), newMonth, year(t) - 2000U);
               autoStartTime = getTeensy3Time(0);
             }
             cDisplay();
@@ -332,7 +358,7 @@ void manualSettings(){
             oldDay = day(t);
             newDay = updateVal(oldDay, 1, 31);
             if(oldDay!=newDay){
-              setTime2(hour(t), minute(t), second(t), newDay, month(t), year(t));
+              setTime2(hour(t), minute(t), second(t), newDay, month(t), year(t) - 2000U);
               autoStartTime = getTeensy3Time(0);
             }
             cDisplay();
@@ -350,7 +376,7 @@ void manualSettings(){
             oldHour = hour(t);
             newHour = updateVal(oldHour, 0, 23);
             if(oldHour!=newHour){
-              setTime2(newHour, minute(t), second(t), day(t), month(t), year(t));
+              setTime2(newHour, minute(t), second(t), day(t), month(t), year(t) - 2000U);
               autoStartTime = getTeensy3Time(0);
             }
             cDisplay();
@@ -368,7 +394,7 @@ void manualSettings(){
             oldMinute = minute(t);
             newMinute = updateVal(oldMinute, 0, 59);
             if(oldMinute!=newMinute){
-              setTime2(hour(t), newMinute, second(t), day(t), month(t), year(t));
+              setTime2(hour(t), newMinute, second(t), day(t), month(t), year(t) - 2000U);
               autoStartTime = getTeensy3Time(0);
             }
             cDisplay();
@@ -386,7 +412,7 @@ void manualSettings(){
             oldSecond = second(t);
             newSecond = updateVal(oldSecond, 0, 59);
             if(oldSecond!=newSecond){
-              setTime2(hour(t), minute(t), newSecond, day(t), month(t), year(t));
+              setTime2(hour(t), minute(t), newSecond, day(t), month(t), year(t) - 2000U);
               autoStartTime = getTeensy3Time(0);
             }
             cDisplay();
