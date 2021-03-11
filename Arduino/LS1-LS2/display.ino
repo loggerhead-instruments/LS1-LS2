@@ -14,7 +14,7 @@ float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries sho
 // 250 kHz = 100 mA
 // 300 kHz = 107 mA
 
-// stereo record power consumption 256 GB Samsung exFAT; 14 mA sleep
+// stereo record power consumption 256 GB Samsung exFAT; 14 mA sleep (2.8 mA if power down SD and disable SPI)
 // 8 kHz = 46 mA
 // 16 kHz = 46 mA
 // 32 kHz = 48 mA
