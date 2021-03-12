@@ -6,10 +6,8 @@
 // David Mann
 
 // To Do
-// - battery calculator use current draw estimate based on sample rate
 // - check battery calculator accuracy
-// - test continuous record
-// - test 60s rec 60s sleep
+// - test card switching
 
 // 
 // Modified from PJRC audio code

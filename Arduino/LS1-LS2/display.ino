@@ -39,7 +39,7 @@ char *menuItem[] = {"Start",
                      "Battery",
                      "Channel",
                      "Mode",
-                     "Diel Time"
+                     "Diel"
                      };
 
 char *helpText[] = {"ENTER:Start RecordingUP/DN:scroll menu",
@@ -191,7 +191,7 @@ void manualSettings(){
     EEPROM.write(12, recMode); //byte
   }
   if (isf<0 | isf>=I_SAMP) {
-    isf = I_SAMP; // change 3 to 4 to allow 192 kHz
+    isf = 4;
     EEPROM.write(13, isf); //byte
   }
   if (nBatPacks<0 | nBatPacks>8){
@@ -634,11 +634,11 @@ void displaySettings(){
   display.setCursor(75, 46);
   display.printf("%.0f",gainDb);
 
-  uint32_t totalRecSeconds = 0;
+  float totalRecSeconds = 0;
 
   mAmpRec = mAmp[isf];
 
-  uint32_t fileBytes = (2 * 2 * rec_dur * lhi_fsamps[isf]) + 44;
+  uint32_t fileBytes = (NCHAN * 2 * rec_dur * lhi_fsamps[isf]) + 44;
   float fileMB = (fileBytes + 32768) / 1000.0 / 1000.0; // add cluster size so don't underestimate fileMB
   float dielFraction = 1.0; //diel mode decreases time spent recording, increases time in sleep
   if(recMode==MODE_DIEL){
