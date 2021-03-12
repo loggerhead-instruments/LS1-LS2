@@ -31,9 +31,8 @@ static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostic
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
 int wakeahead = 5;  //wake from snooze to give hydrophone to power up
 int noDC = 0; // 0 = freezeDC offset; 1 = remove DC offset; 2 = bypass
-#define NCHAN 2
+int NCHAN = 2;
 //*****************************************************************************************
-
 
 #include "LHI_record_queue.h"
 #include "control_sgtl5000.h"
@@ -498,10 +497,12 @@ void loop() {
              SPI.setMISO(12);
       
              delay(100);
+             int cardFailCounter = 0;
              while(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
               display.print("Card Fail");
               display.display();
               delay(100);
+              if(cardFailCounter > 100) resetFunc();
             }
 
             digitalWrite(hydroPowPin, HIGH); // hydrophone on

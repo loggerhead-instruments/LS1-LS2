@@ -1,5 +1,5 @@
 float mAmpRec = 95;  
-float mAmpSleep = 4.2; 
+float mAmpSleep = 2.8; 
 byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
 
@@ -28,13 +28,15 @@ float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries sho
 csd_t m_csd;
 
 int curMenuItem = 0;
-volatile int maxMenuItem = 8;
+volatile int maxMenuItem = 10;
 char *menuItem[] = {"Start",
                      "Record",
                      "Sleep",
                      "Rate",
                      "Gain",
                      "Time",
+                     "Battery",
+                     "Channels",
                      "Mode",
                      "Diel Time"
                      };
@@ -45,6 +47,8 @@ char *helpText[] = {"ENTER:Start RecordingUP/DN:scroll menu",
                     "ENTER:Set Sample RateUP/DN:scroll menu",
                     "ENTER:Set Gain (dB)\nUP/DN:scroll menu",
                     "ENTER:Set Date/Time\nUP/DN:scroll menu",
+                    "ENTER:Set #Bat Packs\nUP/DN:scroll menu",
+                    "ENTER:Set #Channels\nUP/DN:scroll menu",
                     "ENTER:Set Mode\nUP/DN:scroll menu",
                     "ENTER:Set Diel Time\nUP/DN:scroll menu"
                     };
@@ -72,8 +76,10 @@ void printZero(int val){
 #define setFsamp 3
 #define setGain 4
 #define setDateTime 5
-#define setMode 6
-#define setDielTime 7
+#define setBatPacks 6
+#define setChannels 7
+#define setMode 8
+#define setDielTime 9
 
 void manualSettings(){
   boolean startRec = 0, startUp, startDown;
@@ -195,20 +201,24 @@ void manualSettings(){
     gainSetting = 4;
     EEPROM.write(15, gainSetting); //byte
   }
+  if (NCHAN<1 | NCHAN>2) {
+    NCHAN = 1;
+    EEPROM.write(16, NCHAN); //byte
+  }
 
   // Main Menu Loop
    while(startRec==0){
     static int newYear, newMonth, newDay, newHour, newMinute, newSecond, oldYear, oldMonth, oldDay, oldHour, oldMinute, oldSecond;
     t = getTeensy3Time(0);
-  //  if (t - autoStartTime > 600) startRec = 1; //autostart if no activity for 10 minutes
+    if (t - autoStartTime > 600) startRec = 1; //autostart if no activity for 10 minutes
     
     // Check for button press
     boolean selectVal = digitalRead(UP);
     if(recMode==MODE_DIEL){
-      maxMenuItem = 8;
+      maxMenuItem = 10;
     }
     else{
-      maxMenuItem = 7;
+      maxMenuItem = 9;
     }
     if(selectVal==0){
       while(digitalRead(UP)==0){
@@ -427,6 +437,31 @@ void manualSettings(){
           curMenuItem = setStart;
           break;
 
+        case setBatPacks:
+          while(digitalRead(SELECT)==1){
+              nBatPacks = updateVal(nBatPacks, 1, 8);
+              cDisplay();
+              display.print("BatPacks:");
+              display.print(nBatPacks);
+              display.display();
+              delay(2);
+            }
+            while(digitalRead(SELECT)==0); // wait to let go
+            curMenuItem = setStart;
+            break;
+
+        case setChannels:
+          while(digitalRead(SELECT)==1){
+              NCHAN = updateVal(NCHAN, 1, 2);
+              cDisplay();
+              display.print("Channels:");
+              display.print(NCHAN);
+              display.display();
+              delay(2);
+            }
+            while(digitalRead(SELECT)==0); // wait to let go
+            curMenuItem = setStart;
+            break;
 
         case setMode:
           while(digitalRead(SELECT)==1){
@@ -713,12 +748,9 @@ void readEEPROM(){
   endMinute = EEPROM.read(11);
   recMode = EEPROM.read(12);
   isf = EEPROM.read(13);
-//  byte newBatPacks = EEPROM.read(14);
-//  if(newBatPacks>0)
-//  {
-//    nBatPacks = newBatPacks;
-//  }
+  nBatPacks = EEPROM.read(14);
   gainSetting = EEPROM.read(15);
+  NCHAN = EEPROM.read(16);
 }
 
 union {
@@ -753,6 +785,7 @@ void writeEEPROM(){
   EEPROM.write(13, isf); //byte
   EEPROM.write(14, nBatPacks); //byte
   EEPROM.write(15, gainSetting); //byte
+  EEPROM.write(16, NCHAN); //byte
 }
 
 void displayMenu(){
