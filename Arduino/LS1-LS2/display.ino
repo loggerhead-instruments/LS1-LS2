@@ -36,7 +36,7 @@ char *menuItem[] = {"Start",
                      "Gain",
                      "Time",
                      "Battery",
-                     "Channels",
+                     "Channel",
                      "Mode",
                      "Diel Time"
                      };
@@ -90,7 +90,7 @@ void manualSettings(){
 
 // get free space on cards
     cDisplay();
-    display.print("LS v2");
+    display.print("LS Init");
     display.setTextSize(1);
     display.setCursor(0, 16);
     display.println("Card Free/Total MB");
@@ -544,6 +544,7 @@ void manualSettings(){
     displayMenu();
     displaySettings();
     displayVoltage();
+    displayChannels();
     displayClock(getTeensy3Time(0), BOTTOM);
     display.display();
     delay(10);
@@ -800,4 +801,14 @@ void displayVoltage(){
   display.setCursor(100, 0);
   display.print(readVoltage(),1);
   display.print("V");
+}
+
+void displayChannels(){
+  display.setTextSize(1);
+  display.setCursor(100, 8);
+  if(NCHAN==1) display.print("Mono");
+  else {
+    display.setCursor(90, 8);
+    display.print("Stereo");
+  }
 }

@@ -6,14 +6,11 @@
 // David Mann
 
 // To Do
-// - Add 1 channel or 2 channel to menu
-// - Add number of battery packs to menu
 // - battery calculator use current draw estimate based on sample rate
-
+// - check battery calculator accuracy
 // - test continuous record
-// - test 60s rec 60s sleep 1 day
-// - round seconds to 60
-// - test setting StartTime
+// - test 60s rec 60s sleep
+
 // 
 // Modified from PJRC audio code
 // http://www.pjrc.com/store/teensy3_audio.html
