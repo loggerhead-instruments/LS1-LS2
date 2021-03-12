@@ -34,6 +34,7 @@ int noDC = 0; // 0 = freezeDC offset; 1 = remove DC offset; 2 = bypass
 int NCHAN = 2;
 //*****************************************************************************************
 
+
 #include "LHI_record_queue.h"
 #include "control_sgtl5000.h"
 #include <Audio.h>  //this also includes SD.h from lines 89 & 90
@@ -525,31 +526,53 @@ void startRecording() {
   FileInit();
   buf_count = 0;
   queue1.begin();
-  queue2.begin();
+  if(NCHAN==2) queue2.begin();
   if (printDiags)  Serial.println("Queue Begin");
 }
 
 
 byte buffer[NREC*512];
 void continueRecording() {
-  if (queue1.available() >= NREC) {
-    // one buffer is 512 bytes = 256 samples
-    // readBuffer returns an int16 * that contains 256 bytes
-    for(int ii=0;ii<NREC;ii++){ 
-      byte *ptr = buffer+(ii*512);
-      mxLR(ptr, queue1.readBuffer(), queue2.readBuffer()); // interleave 256 points from each
-      queue1.freeBuffer(); 
-      queue2.freeBuffer();  // free buffer
-    }
-    if(file.write(buffer, NREC*512)==-1) resetFunc(); //audio to .wav file
-    
-    buf_count += NREC;
-    if(printDiags){
-      Serial.print(buf_count);
-      Serial.print(" ");
-      Serial.println((int16_t) buffer[1]<<8 | buffer[0]);
+  if(NCHAN==1){
+    if (queue1.available() >= NREC*2) {
+      // Fetch 2 blocks (or multiples) from the audio library and copy
+      // into a 512 byte buffer.  micro SD disk access
+      // is most efficient when full (or multiple of) 512 byte sector size
+      // writes are used.
+      //digitalWrite(ledGreen, HIGH);
+      for(int ii=0;ii<NREC;ii++)
+      { byte *ptr = buffer+ii*512;
+        memcpy(ptr, queue1.readBuffer(), 256);
+        queue1.freeBuffer();
+        memcpy(ptr+256, queue1.readBuffer(), 256);
+        queue1.freeBuffer();
+      }
+      if(file.write(buffer, NREC*512)==-1) resetFunc(); //audio to .wav file
+      buf_count += NREC;
     }
   }
+
+  if(NCHAN==2){
+    if (queue1.available() >= NREC) {
+      // one buffer is 512 bytes = 256 samples
+      // readBuffer returns an int16 * that contains 256 bytes
+      for(int ii=0;ii<NREC;ii++){ 
+        byte *ptr = buffer+(ii*512);
+        mxLR(ptr, queue1.readBuffer(), queue2.readBuffer()); // interleave 256 points from each
+        queue1.freeBuffer(); 
+        queue2.freeBuffer();  // free buffer
+      }
+      if(file.write(buffer, NREC*512)==-1) resetFunc(); //audio to .wav file
+      
+      buf_count += NREC;
+      if(printDiags){
+        Serial.print(buf_count);
+        Serial.print(" ");
+        Serial.println((int16_t) buffer[1]<<8 | buffer[0]);
+      }
+    }
+  }
+
 }
 
 inline void mxLR(byte *dst, const int16_t *srcL, const int16_t *srcR){
@@ -572,10 +595,8 @@ void stopRecording() {
   if (printDiags) Serial.println(maxblocks);
   byte buffer[512];
   queue1.end();
-  queue2.end();
-  //queue1.clear();
+  if(NCHAN==2) queue2.end();
   AudioMemoryUsageMaxReset();
-  //file.timestamp(T_WRITE,(uint16_t) year(t),month(t),day(t),hour(t),minute(t),second);
   file.close();
   delay(100);
 }
