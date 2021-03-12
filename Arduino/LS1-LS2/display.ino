@@ -1,8 +1,9 @@
-float mAmpRec = 95;  
+float mAmpRec = 50;  
 float mAmpSleep = 2.8; 
 byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
 
+float mAmp[9] = { 46, 46, 48, 49, 49, 53, 90, 100, 107}; // max of the different cards
 // stereo record power consumption 1 TB SanDisk exFAT; sleep 4.2 mA
 // 8 kHz = 36 mA
 // 16 kHz = 38 mA
@@ -634,6 +635,8 @@ void displaySettings(){
   display.printf("%.0f",gainDb);
 
   uint32_t totalRecSeconds = 0;
+
+  mAmpRec = mAmp[isf];
 
   uint32_t fileBytes = (2 * 2 * rec_dur * lhi_fsamps[isf]) + 44;
   float fileMB = (fileBytes + 32768) / 1000.0 / 1000.0; // add cluster size so don't underestimate fileMB
