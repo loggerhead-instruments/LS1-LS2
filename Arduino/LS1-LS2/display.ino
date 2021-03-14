@@ -1,5 +1,5 @@
 float mAmpRec = 50;  
-float mAmpSleep = 2.8; 
+float mAmpSleep = 3.2; 
 byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
 
@@ -24,7 +24,7 @@ float mAmp[9] = { 46, 46, 48, 49, 49, 53, 90, 100, 107}; // max of the different
 // 96 kHz = 53 mA
 // 200 kHz = 60 mA
 // 250 kHz = 64 mA
-// 300 kHz = 67 mA
+// 300 kHz = 95 mA
 
 csd_t m_csd;
 
@@ -95,6 +95,13 @@ void manualSettings(){
     display.setTextSize(1);
     display.setCursor(0, 16);
     display.println("Card Free/Total MB");
+
+    // power cards on
+    for (int n=0; n<4; n++){
+      digitalWrite(sdPowSelect[n], HIGH);
+    }
+    delay(1000);
+    
     // Initialize the SD card
     SPI.setMOSI(7);
     SPI.setSCK(14);
@@ -102,7 +109,6 @@ void manualSettings(){
       
     for (int n=0; n<4; n++){
       freeMB[n] = 0; //reset
-      digitalWrite(sdPowSelect[n], HIGH);
       
       Serial.println(); Serial.println();
       Serial.print("Card:"); Serial.println(n + 1);
@@ -111,7 +117,6 @@ void manualSettings(){
       delay(100);
 
       if(sd.begin(chipSelect[n])){
-
         int32_t volFree = sd.vol()->freeClusterCount();
         Serial.print("volFree:");
         Serial.println(volFree);
@@ -143,20 +148,21 @@ void manualSettings(){
        // Serial.println(card.errorData());
         display.println("  None");
         display.display();
+        digitalWrite(sdPowSelect[n], LOW);
     }
-    digitalWrite(sdPowSelect[n], LOW);
-    digitalWrite(chipSelect[n], HIGH); // disable chip select
+    sd.end();
+    // digitalWrite(sdPowSelect[n], LOW);
   }
 
   // set back to card 1
   digitalWrite(sdPowSelect[0], HIGH);
-  if(!sd.begin(chipSelect[0], SD_SCK_MHZ(50))){
+  delay(100);
+  if(!sd.begin(chipSelect[0])){
     display.print("Card 1 Fail");
     display.display();
     while(1);
   }
 
- 
   LoadScript(); // secret settings accessible from card 1
   calcGain();
   writeEEPROM(); // update EEPROM in case any settings changed from card
@@ -190,7 +196,7 @@ void manualSettings(){
     recMode = 0;
     EEPROM.write(12, recMode); //byte
   }
-  if (isf<0 | isf>=I_SAMP) {
+  if (isf<0 | isf>=9) {
     isf = 4;
     EEPROM.write(13, isf); //byte
   }
@@ -251,6 +257,7 @@ void manualSettings(){
         case setStart:
             cDisplay();
             writeEEPROM(); //save settings
+            Serial.print("Current Card "); Serial.println(currentCard);
             display.println("Starting..");
             display.setTextSize(1);
             display.print("Press UP+DN to Stop");
@@ -671,7 +678,7 @@ void displaySettings(){
 
   for(int n=0; n<4; n++){
     filesPerCard[n] = 0;
-    if(freeMB[n]==0) filesPerCard[n] = 0;
+    if(freeMB[n]<=fileMB) filesPerCard[n] = 0;
     else{
       filesPerCard[n] = (uint32_t) floor(freeMB[n] / fileMB);
     }

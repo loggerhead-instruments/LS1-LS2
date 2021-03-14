@@ -7,7 +7,7 @@
 
 // To Do
 // - check battery calculator accuracy
-// - test card switching
+// - test card switching 
 
 // 
 // Modified from PJRC audio code
@@ -101,7 +101,7 @@ int chipSelect[4];
 int sdPowSelect[4];
 uint32_t freeMB[4];
 uint32_t filesPerCard[4];
-int currentCard = 0;
+volatile int currentCard = 0;
 boolean newCard = 0;
 
 // Pins used by audio shield
@@ -136,17 +136,17 @@ float audio_srate = lhi_fsamps[I_SAMP];
 int isf = 4; // default to 48 kHz
 float gainDb;
 int recMode = MODE_NORMAL;
-long rec_dur = 60;
-long rec_int = 60;
+unsigned long rec_dur = 60;
+unsigned long rec_int = 60;
 
 int snooze_hour;
 int snooze_minute;
 int snooze_second;
 int buf_count;
-long nbufs_per_file;
+unsigned long nbufs_per_file;
 boolean settingsChanged = 0;
 
-long file_count;
+unsigned long file_count;
 char filename[100];
 char dirname[20];
 int folderMonth;
@@ -457,16 +457,16 @@ void loop() {
         if( (snooze_hour * 3600) + (snooze_minute * 60) + snooze_second >=10){
             digitalWrite(hydroPowPin, LOW); //hydrophone off
             audio_power_down();  // when this is activated, seems to occassionally have trouble restarting; no LRCLK signal or RX on Teensy
-            digitalWrite(sdPowSelect[currentCard], LOW);
-            digitalWrite(chipSelect[currentCard], LOW);
-            // MISO, MOSI, SCLK LOW
-            digitalWrite(7, LOW);
-            digitalWrite(12, LOW);
-            digitalWrite(14, LOW);
-            pinMode(7, INPUT_DISABLE);
-            pinMode(12, INPUT_DISABLE);
-            pinMode(14, INPUT_DISABLE);
-            pinMode(chipSelect[currentCard], INPUT_DISABLE);
+//            digitalWrite(sdPowSelect[currentCard], LOW);
+//            digitalWrite(chipSelect[currentCard], LOW);
+//            // MISO, MOSI, SCLK LOW
+//            digitalWrite(7, LOW);
+//            digitalWrite(12, LOW);
+//            digitalWrite(14, LOW);
+//            pinMode(7, INPUT_DISABLE);
+//            pinMode(12, INPUT_DISABLE);
+//            pinMode(14, INPUT_DISABLE);
+//            pinMode(chipSelect[currentCard], INPUT_DISABLE);
             // de-select audio
             I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);
             
@@ -487,19 +487,19 @@ void loop() {
             
             // Waking up
            // if (printDiags==0) usbDisable();
-             digitalWrite(sdPowSelect[0], HIGH);
-             SPI.setMOSI(7);
-             SPI.setSCK(14);
-             SPI.setMISO(12);
-      
-             delay(100);
-             int cardFailCounter = 0;
-             while(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
-              display.print("Card Fail");
-              display.display();
-              delay(100);
-              if(cardFailCounter > 100) resetFunc();
-            }
+//             digitalWrite(sdPowSelect[0], HIGH);
+//             SPI.setMOSI(7);
+//             SPI.setSCK(14);
+//             SPI.setMISO(12);
+//      
+//             delay(100);
+//             int cardFailCounter = 0;
+//             while(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
+//              display.print("Card Fail");
+//              display.display();
+//              delay(100);
+//              if(cardFailCounter > 100) resetFunc();
+//            }
 
             digitalWrite(hydroPowPin, HIGH); // hydrophone on
             delay(300);  // give time for Serial to reconnect to USB
@@ -600,26 +600,27 @@ void stopRecording() {
 void FileInit()
 {
    t = getTeensy3Time(1); // this will also sync teensy clock used to wake up to DS3231
-   
-   if (folderMonth != month(t)){
+
+   // use folders for duty cycle record because short files could exceed max files per directory
+   if (folderMonth != month(t) & (rec_int > 0)){
     if(printDiags) Serial.println("New Folder");
     folderMonth = month(t);
     sprintf(dirname, "/%04d-%02d", year(t), folderMonth);
-    #if USE_SDFS==1
-      FsDateTime::callback = file_date_time;
-    #else
-      SdFile::dateTimeCallback(file_date_time);
-    #endif
+
     sd.mkdir(dirname);
+    sd.chdir(dirname);
    }
    pinMode(vSense, INPUT);  // get ready to read voltage
    float voltage = readVoltage();
 
-   // open file 
-   sd.chdir(dirname);
-   sprintf(filename,"%04d%02d%02dT%02d%02d%02d_%lu%lu_%2.1fdB_%2.1fV_ver%s.wav", year(t), month(t), day(t), hour(t), minute(t), second(t), myID[0], myID[1], gainDb, voltage, codeVersion);  //filename is DDHHMMSS
+  #if USE_SDFS==1
+    FsDateTime::callback = file_date_time;
+  #else
+    SdFile::dateTimeCallback(file_date_time);
+  #endif
 
-   sd.chdir(dirname);
+   // open file 
+   sprintf(filename,"%04d%02d%02dT%02d%02d%02d_%lu%lu_%2.1fdB_%2.1fV_ver%s.wav", year(t), month(t), day(t), hour(t), minute(t), second(t), myID[0], myID[1], gainDb, voltage, codeVersion);  //filename is DDHHMMSS
    Serial.println(filename);
    while (!file.open(filename, O_WRITE | O_CREAT | O_EXCL)){
     file_count += 1;
@@ -628,7 +629,17 @@ void FileInit()
     file.open(filename, O_WRITE | O_CREAT | O_EXCL);
     Serial.println(filename);
     delay(10);
-    if(file_count>1000) resetFunc(); // give up after many tries
+    if(file_count>20) {
+      // card potentially corrupted, try next card
+      filesPerCard[currentCard] = 0;
+      digitalWrite(sdPowSelect[currentCard], LOW);
+      currentCard += 1; //skip to next card if can't open this one
+      digitalWrite(sdPowSelect[currentCard], HIGH);
+      if(currentCard > 3) resetFunc();
+      sprintf(filename,"%04d%02d%02dT%02d%02d%02d_%lu%lu_%2.1fdB_%2.1fV_ver%s.wav", year(t), month(t), day(t), hour(t), minute(t), second(t), myID[0], myID[1], gainDb, voltage, codeVersion);  //filename is DDHHMMSS
+      checkSD();
+      delay(1000);
+    }
    }
 
     //intialize stereo .wav file header
@@ -708,7 +719,7 @@ time_t getTeensy3Time(boolean syncTeensy)
 
 void resetFunc(void){
   EEPROM.write(20, 1); // reset indicator register
-  file.close();  // close file if open
+  if(mode == 1) file.close();  // close file if open
   // MISO, MOSI, SCLK LOW
   digitalWrite(7, LOW);
   digitalWrite(12, LOW);
@@ -723,7 +734,15 @@ void resetFunc(void){
     digitalWrite(chipSelect[n], LOW);
     pinMode(chipSelect[n], INPUT_DISABLE);
   }
-  delay(10);
+  delay(2000);
+    for(int n = 0; n<4; n++){
+    digitalWrite(sdPowSelect[n], HIGH);
+  }
+  delay(2000);
+    for(int n = 0; n<4; n++){
+    digitalWrite(sdPowSelect[n], LOW);
+  }
+  delay(2000);
   CPU_RESTART
 }
 
@@ -754,7 +773,8 @@ void checkSD(){
   
   // find next card with files available
   while(filesPerCard[currentCard] <= 0){
-    digitalWrite(sdPowSelect[currentCard], LOW);// power down currentCard
+    sd.end();
+    // digitalWrite(sdPowSelect[currentCard], LOW);// power down currentCard
     currentCard += 1;
     newCard = 1;
     if(currentCard == 4)  // all cards full
@@ -763,14 +783,15 @@ void checkSD(){
       resetFunc(); // try resetting in case some cards didn't work first time, or there is a bit of memory left
     }
     digitalWrite(sdPowSelect[currentCard], HIGH);
-    delay(50); // time to power up
-    if(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
+    delay(100); // time to power up
+    if(!sd.begin(chipSelect[currentCard])){
        if(printDiags){
         Serial.print("Unable to access the SD card: ");
         Serial.println(currentCard + 1);
         }
         filesPerCard[currentCard] = 0;
         currentCard += 1; //skip to next card if can't open this one
+        if(currentCard == 4) resetFunc();
     }
   }
 

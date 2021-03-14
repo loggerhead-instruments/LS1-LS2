@@ -79,11 +79,8 @@ boolean LoadScript()
   char c;
   short i;
 
-#if USE_SDFS==1
   FsFile file;
-#else
-  File file;
-#endif
+
   unsigned long TM_byte;
   int comment_TM = 0;
 
