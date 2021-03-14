@@ -1,13 +1,10 @@
 //
 // LS1 and LS2 acoustic recorders
+// THIS VERSION CURRENTLY ONLY WORKS WITH 1 CARD
 //
 // Loggerhead Instruments
 // 2021
-// David Mann
-
-// To Do
-// - check battery calculator accuracy
-// - test card switching 
+// David Mann 
 
 // 
 // Modified from PJRC audio code
@@ -21,7 +18,7 @@
 //*****************************************************************************************
 
 char codeVersion[5] = "2.00";
-static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
+static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
 int wakeahead = 5;  //wake from snooze to give hydrophone to power up
@@ -560,11 +557,11 @@ void continueRecording() {
       if(file.write(buffer, NREC*512)==-1) resetFunc(); //audio to .wav file
       
       buf_count += NREC;
-      if(printDiags){
-        Serial.print(buf_count);
-        Serial.print(" ");
-        Serial.println((int16_t) buffer[1]<<8 | buffer[0]);
-      }
+//      if(printDiags){
+//        Serial.print(buf_count);
+//        Serial.print(" ");
+//        Serial.println((int16_t) buffer[1]<<8 | buffer[0]);
+//      }
     }
   }
 
@@ -726,18 +723,18 @@ void resetFunc(void){
   pinMode(12, INPUT_DISABLE);
   pinMode(14, INPUT_DISABLE);
   
-  // power down all SD cards
+  //cycle power on all SD cards
   for(int n = 0; n<4; n++){
     digitalWrite(sdPowSelect[n], LOW);
     digitalWrite(chipSelect[n], LOW);
     pinMode(chipSelect[n], INPUT_DISABLE);
   }
   delay(2000);
-    for(int n = 0; n<4; n++){
+  for(int n = 0; n<4; n++){
     digitalWrite(sdPowSelect[n], HIGH);
   }
   delay(2000);
-    for(int n = 0; n<4; n++){
+  for(int n = 0; n<4; n++){
     digitalWrite(sdPowSelect[n], LOW);
   }
   delay(2000);

@@ -2,6 +2,7 @@ float mAmpRec = 50;
 float mAmpSleep = 3.2; 
 byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
+float fileMB;
 
 float mAmp[9] = { 46, 46, 48, 49, 49, 53, 90, 100, 107}; // max of the different cards
 // stereo record power consumption 1 TB SanDisk exFAT; sleep 4.2 mA
@@ -258,6 +259,9 @@ void manualSettings(){
             cDisplay();
             writeEEPROM(); //save settings
             Serial.print("Current Card "); Serial.println(currentCard);
+            Serial.print("File MB "); Serial.println(fileMB);
+            Serial.print("Free MB "); Serial.println(freeMB[currentCard]);
+            Serial.print("Current Card Files "); Serial.println(filesPerCard[currentCard]);
             display.println("Starting..");
             display.setTextSize(1);
             display.print("Press UP+DN to Stop");
@@ -645,8 +649,9 @@ void displaySettings(){
 
   mAmpRec = mAmp[isf];
 
-  uint32_t fileBytes = (NCHAN * 2 * rec_dur * lhi_fsamps[isf]) + 44;
-  float fileMB = (fileBytes + 32768) / 1000.0 / 1000.0; // add cluster size so don't underestimate fileMB
+  float fileBytes = ((float) NCHAN * 2.0 * (float) rec_dur * (float) lhi_fsamps[isf]) + 44.0;
+  
+  fileMB = (fileBytes + 32768.0) / 1000.0 / 1000.0; // add cluster size so don't underestimate fileMB
   float dielFraction = 1.0; //diel mode decreases time spent recording, increases time in sleep
   if(recMode==MODE_DIEL){
     float dielHours, dielMinutes;
