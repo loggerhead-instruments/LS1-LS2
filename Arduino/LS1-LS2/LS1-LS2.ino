@@ -632,9 +632,7 @@ void FileInit()
     if(file_count>20) {
       // card potentially corrupted, try next card
       filesPerCard[currentCard] = 0;
-      digitalWrite(sdPowSelect[currentCard], LOW);
       currentCard += 1; //skip to next card if can't open this one
-      digitalWrite(sdPowSelect[currentCard], HIGH);
       if(currentCard > 3) resetFunc();
       sprintf(filename,"%04d%02d%02dT%02d%02d%02d_%lu%lu_%2.1fdB_%2.1fV_ver%s.wav", year(t), month(t), day(t), hour(t), minute(t), second(t), myID[0], myID[1], gainDb, voltage, codeVersion);  //filename is DDHHMMSS
       checkSD();
