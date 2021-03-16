@@ -4,7 +4,8 @@ byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
 float fileMB;
 
-float mAmp[9] = { 46, 46, 48, 49, 49, 53, 90, 100, 107}; // max of the different cards
+float mAmpMono[9] = { 35, 37, 38, 41, 41, 48, 64, 69, 79};
+float mAmpStereo[9] = { 36, 38, 43, 47, 48, 62, 90, 100, 107};
 // stereo record power consumption 1 TB SanDisk exFAT; sleep 4.2 mA
 // 8 kHz = 36 mA
 // 16 kHz = 38 mA
@@ -15,6 +16,17 @@ float mAmp[9] = { 46, 46, 48, 49, 49, 53, 90, 100, 107}; // max of the different
 // 200 kHz = 90 mA
 // 250 kHz = 100 mA
 // 300 kHz = 107 mA
+
+// mono
+// 8 kHz = 35 mA
+// 16 kHz = 37 mA
+// 32 kHz = 38 mA
+// 44.1 kHz = 41 mA
+// 48 kHz = 41 mA
+// 96 kHz = 48 mA
+// 200 kHz = 64 mA
+// 250 kHz = 69 mA
+// 300 kHz = 79 mA
 
 // stereo record power consumption 256 GB Samsung exFAT; 14 mA sleep (2.8 mA if power down SD and disable SPI)
 // 8 kHz = 46 mA
@@ -98,7 +110,7 @@ void manualSettings(){
     display.println("Card Free/Total MB");
 
     // power cards on
-    for (int n=0; n<4; n++){
+    for (int n=0; n<1; n++){
       digitalWrite(sdPowSelect[n], HIGH);
     }
     delay(1000);
@@ -108,7 +120,7 @@ void manualSettings(){
     SPI.setSCK(14);
     SPI.setMISO(12);
       
-    for (int n=0; n<4; n++){
+    for (int n=0; n<1; n++){
       freeMB[n] = 0; //reset
       
       Serial.println(); Serial.println();
@@ -145,24 +157,21 @@ void manualSettings(){
       }
       else{
         Serial.println("Unable to access the SD card");
-        //Serial.println(card.errorCode());
-       // Serial.println(card.errorData());
-        display.println("  None");
+        display.print("Card Fail");
         display.display();
-        digitalWrite(sdPowSelect[n], LOW);
+        while(1);
     }
-    sd.end();
     // digitalWrite(sdPowSelect[n], LOW);
   }
 
-  // set back to card 1
-  digitalWrite(sdPowSelect[0], HIGH);
-  delay(100);
-  if(!sd.begin(chipSelect[0])){
-    display.print("Card 1 Fail");
-    display.display();
-    while(1);
-  }
+//  // set back to card 1
+//  digitalWrite(sdPowSelect[0], HIGH);
+//  delay(100);
+//  if(!sd.begin(chipSelect[0])){
+//    display.print("Card 1 Fail");
+//    display.display();
+//    while(1);
+//  }
 
   LoadScript(); // secret settings accessible from card 1
   calcGain();
@@ -647,7 +656,8 @@ void displaySettings(){
 
   float totalRecSeconds = 0;
 
-  mAmpRec = mAmp[isf];
+  if(NCHAN==1) mAmpRec = mAmpMono[isf];
+  if(NCHAN==2) mAmpRec = mAmpStereo[isf];
 
   float fileBytes = ((float) NCHAN * 2.0 * (float) rec_dur * (float) lhi_fsamps[isf]) + 44.0;
   

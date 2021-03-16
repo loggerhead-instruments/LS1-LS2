@@ -18,10 +18,10 @@
 //*****************************************************************************************
 
 char codeVersion[5] = "2.00";
-static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics
+static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
-int wakeahead = 5;  //wake from snooze to give hydrophone to power up
+int wakeahead = 4;  //wake from snooze to give hydrophone to power up
 int noDC = 0; // 0 = freezeDC offset; 1 = remove DC offset; 2 = bypass
 int NCHAN = 2;
 //*****************************************************************************************
@@ -627,12 +627,7 @@ void FileInit()
     Serial.println(filename);
     delay(10);
     if(file_count>20) {
-      // card potentially corrupted, try next card
-      filesPerCard[currentCard] = 0;
-      currentCard += 1; //skip to next card if can't open this one
-      if(currentCard > 3) resetFunc();
-      sprintf(filename,"%04d%02d%02dT%02d%02d%02d_%lu%lu_%2.1fdB_%2.1fV_ver%s.wav", year(t), month(t), day(t), hour(t), minute(t), second(t), myID[0], myID[1], gainDb, voltage, codeVersion);  //filename is DDHHMMSS
-      checkSD();
+      resetFunc();
       delay(1000);
     }
    }
@@ -723,7 +718,7 @@ void resetFunc(void){
   pinMode(12, INPUT_DISABLE);
   pinMode(14, INPUT_DISABLE);
   
-  //cycle power on all SD cards
+  //cycle power on all SD cards (in case there are cards in other slots)
   for(int n = 0; n<4; n++){
     digitalWrite(sdPowSelect[n], LOW);
     digitalWrite(chipSelect[n], LOW);
@@ -760,39 +755,14 @@ float readVoltage(){
 
 void checkSD(){
   if (filesPerCard[currentCard] > 0) filesPerCard[currentCard] -= 1;
+  else{
+    // card full, stop recordings
+    while(1);
+  }
 
   if(printDiags){
     Serial.print("Files per card: ");
     Serial.println(filesPerCard[currentCard]);
-  }
-  
-  // find next card with files available
-  while(filesPerCard[currentCard] <= 0){
-    sd.end();
-    // digitalWrite(sdPowSelect[currentCard], LOW);// power down currentCard
-    currentCard += 1;
-    newCard = 1;
-    if(currentCard == 4)  // all cards full
-    {
-      if(printDiags) Serial.println("All cards full");
-      resetFunc(); // try resetting in case some cards didn't work first time, or there is a bit of memory left
-    }
-    digitalWrite(sdPowSelect[currentCard], HIGH);
-    delay(100); // time to power up
-    if(!sd.begin(chipSelect[currentCard])){
-       if(printDiags){
-        Serial.print("Unable to access the SD card: ");
-        Serial.println(currentCard + 1);
-        }
-        filesPerCard[currentCard] = 0;
-        currentCard += 1; //skip to next card if can't open this one
-        if(currentCard == 4) resetFunc();
-    }
-  }
-
-  if(printDiags){
-    Serial.print("Current Card: ");
-    Serial.println(currentCard + 1);
   }
 }
 
