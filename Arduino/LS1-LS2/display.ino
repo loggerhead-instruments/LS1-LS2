@@ -164,15 +164,6 @@ void manualSettings(){
     // digitalWrite(sdPowSelect[n], LOW);
   }
 
-//  // set back to card 1
-//  digitalWrite(sdPowSelect[0], HIGH);
-//  delay(100);
-//  if(!sd.begin(chipSelect[0])){
-//    display.print("Card 1 Fail");
-//    display.display();
-//    while(1);
-//  }
-
   LoadScript(); // secret settings accessible from card 1
   calcGain();
   writeEEPROM(); // update EEPROM in case any settings changed from card

@@ -1,6 +1,6 @@
 //
 // LS1 and LS2 acoustic recorders
-// THIS VERSION CURRENTLY ONLY WORKS WITH 1 CARD
+// THIS VERSION ONLY WORKS WITH 1 CARD
 //
 // Loggerhead Instruments
 // 2021
@@ -17,7 +17,7 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "2.00";
+char codeVersion[5] = "3.00";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
@@ -91,9 +91,7 @@ const int vSense = A14;
 #define CS3 20
 #define CS4 21
 #define SDPOW1 17
-#define SDPOW2 16
-#define SDPOW3 5
-#define SDPOW4 6
+#define SGTL_EN 6
 int chipSelect[4];
 int sdPowSelect[4];
 uint32_t freeMB[4];
@@ -226,13 +224,7 @@ void setup() {
   read_myID();
 
   chipSelect[0] = CS1;
-  chipSelect[1] = CS2;
-  chipSelect[2] = CS3;
-  chipSelect[3] = CS4;
   sdPowSelect[0] = SDPOW1;
-  sdPowSelect[1] = SDPOW2;
-  sdPowSelect[2] = SDPOW3;
-  sdPowSelect[3] = SDPOW4;
   
   Serial.begin(baud);
   delay(500);
@@ -260,13 +252,9 @@ void setup() {
   digitalWrite(hydroPowPin, HIGH);
 
   pinMode(SDPOW1, OUTPUT);
-  pinMode(SDPOW2, OUTPUT);
-  pinMode(SDPOW3, OUTPUT);
-  pinMode(SDPOW4, OUTPUT);
-  digitalWrite(SDPOW1, LOW); // start all cards switched off in case of reset
-  digitalWrite(SDPOW2, LOW);
-  digitalWrite(SDPOW3, LOW);
-  digitalWrite(SDPOW4, LOW);
+  pinMode(SGTL_EN, OUTPUT);
+  digitalWrite(SDPOW1, LOW); // start cardsswitched off in case of reset
+  digitalWrite(SGTL_EN, HIGH);
   
   //setup display and controls
   pinMode(UP, INPUT_PULLUP);
@@ -718,18 +706,18 @@ void resetFunc(void){
   pinMode(12, INPUT_DISABLE);
   pinMode(14, INPUT_DISABLE);
   
-  //cycle power on all SD cards (in case there are cards in other slots)
-  for(int n = 0; n<4; n++){
+  //cycle power on SD cards (in case there are cards in other slots)
+  for(int n = 0; n<1; n++){
     digitalWrite(sdPowSelect[n], LOW);
     digitalWrite(chipSelect[n], LOW);
     pinMode(chipSelect[n], INPUT_DISABLE);
   }
   delay(2000);
-  for(int n = 0; n<4; n++){
+  for(int n = 0; n<1; n++){
     digitalWrite(sdPowSelect[n], HIGH);
   }
   delay(2000);
-  for(int n = 0; n<4; n++){
+  for(int n = 0; n<1; n++){
     digitalWrite(sdPowSelect[n], LOW);
   }
   delay(2000);
