@@ -22,7 +22,7 @@
 //*****************************************************************************************
 
 char codeVersion[5] = "4.00";
-static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
+static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
 int wakeahead = 4;  //wake from snooze to give hydrophone to power up
@@ -390,10 +390,14 @@ void loop() {
         printTime(startTime);
 
         mode = 1;
-        cDisplay();
-        display.println("Start rec"); display.display();
-        display.setTextSize(1);
-   //     display.ssd1306_command(SSD1306_DISPLAYOFF); // turn off display during recording
+        if(printDiags){
+          cDisplay();
+          display.println("Start rec"); display.display();
+          display.setTextSize(1);
+        }
+        else {
+          display.ssd1306_command(SSD1306_DISPLAYOFF); // turn off display during recording
+        }
         startRecording();
       }
   }
@@ -446,27 +450,33 @@ void loop() {
         snooze_second = ss;
         
         if( (snooze_hour * 3600) + (snooze_minute * 60) + snooze_second >=10){
+          if(printDiags){
             cDisplay();
             display.println("Sleep");
             display.setTextSize(1);
             display.println("hydrophone off"); display.display();
+          }
             digitalWrite(hydroPowPin, LOW); //hydrophone off
             audio_power_down();  // when this is activated, seems to occassionally have trouble restarting; no LRCLK signal or RX on Teensy
             digitalWrite(SGTL_EN, LOW); // power off audio codec
-            display.println("card off"); display.display();
+            if(printDiags){
+              display.println("card off"); display.display();
+            }
+            SPI.end();
             digitalWrite(chipSelect[currentCard], HIGH); // chip select is active low
             delay(1000);  // give card time to finish whatever it is doing
             digitalWrite(sdPowSelect[currentCard], LOW);
-            SPI.end();
-            pinMode(7, INPUT_DISABLE);
-            pinMode(12, INPUT_DISABLE);
-            pinMode(14, INPUT_DISABLE);
-            // MISO, MOSI, SCLK LOW
-            digitalWrite(7, HIGH);
-            digitalWrite(12, HIGH);
-            digitalWrite(14, HIGH);
+            
+//            pinMode(7, INPUT_DISABLE);
+//            pinMode(12, INPUT_DISABLE);
+//            pinMode(14, INPUT_DISABLE);
+//            // MISO, MOSI, SCLK LOW 
+//            digitalWrite(7, HIGH);
+//            digitalWrite(12, HIGH);
+//            digitalWrite(14, HIGH);
             // pinMode(chipSelect[currentCard], INPUT_DISABLE);
-            // de-select audio
+            
+            // stop I2S: will be restarted by AudioInit
             I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);
             
             
@@ -480,7 +490,9 @@ void loop() {
             delay(100);
 
             alarm.setRtcTimer(snooze_hour, snooze_minute, snooze_second); // to be compatible with new snooze library
+            SIM_SCGC6 &= ~SIM_SCGC6_I2S; 
             Snooze.hibernate(config_teensy32); 
+            SIM_SCGC6 |= SIM_SCGC6_I2S; // wake I2S clock (https://forum.pjrc.com/threads/45034-audio-library-wakes-up-teensy-from-hibernate)
 
             /// ... Sleeping ....
             
@@ -491,19 +503,21 @@ void loop() {
             display.setTextSize(1);
             // if (printDiags==0) usbDisable();
             digitalWrite(SGTL_EN, HIGH); // power on audio codec
-             digitalWrite(sdPowSelect[0], HIGH);
+            digitalWrite(sdPowSelect[0], HIGH);
+             
              SPI.setMOSI(7);
              SPI.setSCK(14);
              SPI.setMISO(12);
+             SPI.begin();
       
-             delay(100);
+             delay(1000);
              int cardFailCounter = 0;
              while(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
-              display.print("Card Fail");
-              display.display();
-              delay(100);
-              if(cardFailCounter > 100) resetFunc();
-            }
+                display.print("Card Fail");
+                display.display();
+                delay(100);
+                if(cardFailCounter > 100) resetFunc();
+              }
             display.println("Card init"); display.display();
             sd.chdir(dirname);
             display.println(dirname); display.display();
@@ -512,10 +526,7 @@ void loop() {
             delay(300);  // give time for Serial to reconnect to USB
             AudioInit(isf);
             display.println("audio init"); display.display();
-            
-            //audio_power_up();  // when use audio_power_down() before sleeping, does not always get LRCLK. This did not fix.  
          }
-        
         mode = 0;  // standby mode
       }
     }
@@ -531,8 +542,11 @@ void startRecording() {
   buf_count = 0;
   queue1.begin();
   if(NCHAN==2) queue2.begin();
-  if (printDiags)  Serial.println("Queue Begin");
-  display.println("Queue begin"); display.display();
+  if (printDiags)  {
+    Serial.println("Queue Begin");
+    display.println("Queue begin");
+    display.display();
+  }
 }
 
 byte buffer[NREC*512];
@@ -550,6 +564,10 @@ void continueRecording() {
         queue1.freeBuffer();
         memcpy(ptr+256, queue1.readBuffer(), 256);
         queue1.freeBuffer();
+      }
+      if(printDiags) {
+        display.print(".");
+        display.display();
       }
       if(file.write(buffer, NREC*512)==-1) resetFunc(); //audio to .wav file
       buf_count += NREC;
