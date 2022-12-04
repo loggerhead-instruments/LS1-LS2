@@ -3,8 +3,12 @@
 // THIS VERSION ONLY WORKS WITH 1 CARD
 //
 // Loggerhead Instruments
-// 2021
+// 2022
 // David Mann 
+
+// To Do:
+// Delay start
+// If reboot--do not delay start
 
 // 
 // Modified from PJRC audio code
@@ -17,8 +21,8 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "3.00";
-static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
+char codeVersion[5] = "4.00";
+static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
 int wakeahead = 4;  //wake from snooze to give hydrophone to power up
@@ -253,7 +257,7 @@ void setup() {
 
   pinMode(SDPOW1, OUTPUT);
   pinMode(SGTL_EN, OUTPUT);
-  digitalWrite(SDPOW1, LOW); // start cardsswitched off in case of reset
+  digitalWrite(SDPOW1, LOW); // start cards switched off in case of reset
   digitalWrite(SGTL_EN, HIGH);
   
   //setup display and controls
@@ -276,7 +280,7 @@ void setup() {
 //WMXZ  audioIntervalSec = 256.0 / audio_srate; //buffer interval in seconds
 
   AudioInit(isf); // load current gain setting
-  manualSettings();
+  manualSettings(); // this initializes SD
   audio_srate = lhi_fsamps[isf];
   AudioInit(isf); // set with new settings
 
@@ -442,16 +446,17 @@ void loop() {
         if( (snooze_hour * 3600) + (snooze_minute * 60) + snooze_second >=10){
             digitalWrite(hydroPowPin, LOW); //hydrophone off
             audio_power_down();  // when this is activated, seems to occassionally have trouble restarting; no LRCLK signal or RX on Teensy
-//            digitalWrite(sdPowSelect[currentCard], LOW);
-//            digitalWrite(chipSelect[currentCard], LOW);
-//            // MISO, MOSI, SCLK LOW
-//            digitalWrite(7, LOW);
-//            digitalWrite(12, LOW);
-//            digitalWrite(14, LOW);
-//            pinMode(7, INPUT_DISABLE);
-//            pinMode(12, INPUT_DISABLE);
-//            pinMode(14, INPUT_DISABLE);
-//            pinMode(chipSelect[currentCard], INPUT_DISABLE);
+            digitalWrite(SGTL_EN, LOW); // power off audio codec
+            digitalWrite(sdPowSelect[currentCard], LOW);
+            digitalWrite(chipSelect[currentCard], LOW);
+            // MISO, MOSI, SCLK LOW
+            digitalWrite(7, LOW);
+            digitalWrite(12, LOW);
+            digitalWrite(14, LOW);
+            pinMode(7, INPUT_DISABLE);
+            pinMode(12, INPUT_DISABLE);
+            pinMode(14, INPUT_DISABLE);
+            // pinMode(chipSelect[currentCard], INPUT_DISABLE);
             // de-select audio
             I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);
             
@@ -466,25 +471,28 @@ void loop() {
             delay(100);
 
             alarm.setRtcTimer(snooze_hour, snooze_minute, snooze_second); // to be compatible with new snooze library
-            Snooze.sleep(config_teensy32); 
+            Snooze.hibernate(config_teensy32); 
 
             /// ... Sleeping ....
             
             // Waking up
-           // if (printDiags==0) usbDisable();
-//             digitalWrite(sdPowSelect[0], HIGH);
-//             SPI.setMOSI(7);
-//             SPI.setSCK(14);
-//             SPI.setMISO(12);
-//      
-//             delay(100);
-//             int cardFailCounter = 0;
-//             while(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
-//              display.print("Card Fail");
-//              display.display();
-//              delay(100);
-//              if(cardFailCounter > 100) resetFunc();
-//            }
+            // if (printDiags==0) usbDisable();
+            digitalWrite(SGTL_EN, HIGH); // power on audio codec
+             digitalWrite(sdPowSelect[0], HIGH);
+             SPI.setMOSI(7);
+             SPI.setSCK(14);
+             SPI.setMISO(12);
+      
+             delay(100);
+             int cardFailCounter = 0;
+             while(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
+              display.print("Card Fail");
+              display.display();
+              delay(100);
+              if(cardFailCounter > 100) resetFunc();
+            }
+
+            sd.chdir(dirname);
 
             digitalWrite(hydroPowPin, HIGH); // hydrophone on
             delay(300);  // give time for Serial to reconnect to USB
