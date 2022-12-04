@@ -22,7 +22,7 @@
 //*****************************************************************************************
 
 char codeVersion[5] = "4.00";
-static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics
+static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
 int wakeahead = 4;  //wake from snooze to give hydrophone to power up
@@ -390,11 +390,13 @@ void loop() {
         printTime(startTime);
 
         mode = 1;
-        display.ssd1306_command(SSD1306_DISPLAYOFF); // turn off display during recording
+        cDisplay();
+        display.println("Start rec"); display.display();
+        display.setTextSize(1);
+   //     display.ssd1306_command(SSD1306_DISPLAYOFF); // turn off display during recording
         startRecording();
       }
   }
-
 
   // Record mode
   if (mode == 1) {
@@ -444,18 +446,25 @@ void loop() {
         snooze_second = ss;
         
         if( (snooze_hour * 3600) + (snooze_minute * 60) + snooze_second >=10){
+            cDisplay();
+            display.println("Sleep");
+            display.setTextSize(1);
+            display.println("hydrophone off"); display.display();
             digitalWrite(hydroPowPin, LOW); //hydrophone off
             audio_power_down();  // when this is activated, seems to occassionally have trouble restarting; no LRCLK signal or RX on Teensy
             digitalWrite(SGTL_EN, LOW); // power off audio codec
+            display.println("card off"); display.display();
+            digitalWrite(chipSelect[currentCard], HIGH); // chip select is active low
+            delay(1000);  // give card time to finish whatever it is doing
             digitalWrite(sdPowSelect[currentCard], LOW);
-            digitalWrite(chipSelect[currentCard], LOW);
-            // MISO, MOSI, SCLK LOW
-            digitalWrite(7, LOW);
-            digitalWrite(12, LOW);
-            digitalWrite(14, LOW);
+            SPI.end();
             pinMode(7, INPUT_DISABLE);
             pinMode(12, INPUT_DISABLE);
             pinMode(14, INPUT_DISABLE);
+            // MISO, MOSI, SCLK LOW
+            digitalWrite(7, HIGH);
+            digitalWrite(12, HIGH);
+            digitalWrite(14, HIGH);
             // pinMode(chipSelect[currentCard], INPUT_DISABLE);
             // de-select audio
             I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);
@@ -476,6 +485,10 @@ void loop() {
             /// ... Sleeping ....
             
             // Waking up
+            display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  //initialize display
+            cDisplay();
+            display.println("Wake"); display.display();
+            display.setTextSize(1);
             // if (printDiags==0) usbDisable();
             digitalWrite(SGTL_EN, HIGH); // power on audio codec
              digitalWrite(sdPowSelect[0], HIGH);
@@ -491,17 +504,18 @@ void loop() {
               delay(100);
               if(cardFailCounter > 100) resetFunc();
             }
-
+            display.println("Card init"); display.display();
             sd.chdir(dirname);
+            display.println(dirname); display.display();
 
             digitalWrite(hydroPowPin, HIGH); // hydrophone on
             delay(300);  // give time for Serial to reconnect to USB
             AudioInit(isf);
+            display.println("audio init"); display.display();
             
             //audio_power_up();  // when use audio_power_down() before sleeping, does not always get LRCLK. This did not fix.  
          }
-
-        display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  //initialize display
+        
         mode = 0;  // standby mode
       }
     }
@@ -511,13 +525,15 @@ void loop() {
 
 void startRecording() {
   if (printDiags)  Serial.println("startRecording");
+  display.println("File Init"); display.display();
   FileInit();
+  display.println("Success"); display.display();
   buf_count = 0;
   queue1.begin();
   if(NCHAN==2) queue2.begin();
   if (printDiags)  Serial.println("Queue Begin");
+  display.println("Queue begin"); display.display();
 }
-
 
 byte buffer[NREC*512];
 void continueRecording() {
@@ -560,7 +576,6 @@ void continueRecording() {
 //      }
     }
   }
-
 }
 
 inline void mxLR(byte *dst, const int16_t *srcL, const int16_t *srcR){
@@ -707,17 +722,18 @@ void resetFunc(void){
   EEPROM.write(20, 1); // reset indicator register
   if(mode == 1) file.close();  // close file if open
   // MISO, MOSI, SCLK LOW
-  digitalWrite(7, LOW);
-  digitalWrite(12, LOW);
-  digitalWrite(14, LOW);
+
   pinMode(7, INPUT_DISABLE);
   pinMode(12, INPUT_DISABLE);
   pinMode(14, INPUT_DISABLE);
+  digitalWrite(7, HIGH);
+  digitalWrite(12, HIGH);
+  digitalWrite(14, HIGH);
   
   //cycle power on SD cards (in case there are cards in other slots)
   for(int n = 0; n<1; n++){
     digitalWrite(sdPowSelect[n], LOW);
-    digitalWrite(chipSelect[n], LOW);
+    digitalWrite(chipSelect[n], HIGH);
     pinMode(chipSelect[n], INPUT_DISABLE);
   }
   delay(2000);
@@ -753,7 +769,24 @@ void checkSD(){
   if (filesPerCard[currentCard] > 0) filesPerCard[currentCard] -= 1;
   else{
     // card full, stop recordings
-    while(1);
+    digitalWrite(SGTL_EN, LOW); // power off audio codec
+    digitalWrite(sdPowSelect[currentCard], LOW);
+    digitalWrite(chipSelect[currentCard], LOW);
+    // MISO, MOSI, SCLK LOW
+    digitalWrite(7, LOW);
+    digitalWrite(12, LOW);
+    digitalWrite(14, LOW);
+    pinMode(7, INPUT_DISABLE);
+    pinMode(12, INPUT_DISABLE);
+    pinMode(14, INPUT_DISABLE);
+    // pinMode(chipSelect[currentCard], INPUT_DISABLE);
+    // de-select audio
+    I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);
+    
+    while(1){
+      alarm.setRtcTimer(1, 0, 0);
+      Snooze.deepSleep(config_teensy32); 
+    }
   }
 
   if(printDiags){
