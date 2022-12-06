@@ -25,7 +25,7 @@ char codeVersion[5] = "4.00";
 static boolean printDiags = 1;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
-int wakeahead = 4;  //wake from snooze to give hydrophone to power up
+int wakeahead = 5;  //wake from snooze to give hydrophone to power up
 int noDC = 0; // 0 = freezeDC offset; 1 = remove DC offset; 2 = bypass
 int NCHAN = 2;
 //*****************************************************************************************
@@ -37,7 +37,7 @@ int NCHAN = 2;
 #include <Wire.h>
 #include <SPI.h>
 #include "SdFat.h"
-#include <Snooze.h>  //using https://github.com/duff2013/Snooze; uncomment line 62 #define USE_HIBERNATE
+#include <Snooze.h>  //using https://github.com/duff2013/Snooze
 #include <TimeLib.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -91,9 +91,6 @@ const int vSense = A14;
 
 // microSD chip select pins
 #define CS1 10
-#define CS2 15
-#define CS3 20
-#define CS4 21
 #define SDPOW1 17
 #define SGTL_EN 6
 int chipSelect[4];
@@ -124,6 +121,7 @@ int mode = 0;  // 0=stopped, 1=recording, 2=playing
 time_t startTime;
 time_t stopTime;
 time_t t;
+time_t wakeTime;
 
 byte startHour, startMinute, endHour, endMinute; //used in Diel mode
 long dielRecSeconds;
@@ -150,9 +148,10 @@ char filename[100];
 char dirname[20];
 int folderMonth;
 
-SnoozeAlarm alarm;
+// SnoozeAlarm alarm;
+SnoozeDigital digital;
 SnoozeAudio snooze_audio;
-SnoozeBlock config_teensy32(snooze_audio, alarm);
+SnoozeBlock config_teensy32(snooze_audio, digital);
 
 // SD_FAT_TYPE = 0 for SdFat/File as defined in SdFatConfig.h,
 // 1 for FAT16/FAT32, 2 for exFAT, 3 for FAT16/FAT32 and exFAT.
@@ -264,6 +263,9 @@ void setup() {
   pinMode(UP, INPUT_PULLUP);
   pinMode(DOWN, INPUT_PULLUP);
   pinMode(SELECT, INPUT_PULLUP);
+
+  // set up interrupt from DS3231 RTC
+  digital.pinMode(21, INPUT_PULLUP, FALLING);//pin, mode, type
   
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  //initialize display
   delay(140);
@@ -436,12 +438,16 @@ void loop() {
         if(printDiags) {
           Serial.print("Audio Mem: ");
           Serial.println(AudioMemoryUsageMax());
+          Serial.flush(); // make sure empty so doesn't prematurely wake
         }
       }
       else{
         stopRecording();
         checkSD();
-        long ss = startTime - getTeensy3Time(0) - wakeahead;
+        t = getTeensy3Time(0);
+        long ss = startTime - t - wakeahead;
+        wakeTime = startTime - wakeahead;
+        
         if (ss<0) ss=0;
         snooze_hour = floor(ss/3600);
         ss -= snooze_hour * 3600;
@@ -450,17 +456,25 @@ void loop() {
         snooze_second = ss;
         
         if( (snooze_hour * 3600) + (snooze_minute * 60) + snooze_second >=10){
-          if(printDiags){
-            cDisplay();
-            display.println("Sleep");
-            display.setTextSize(1);
-            display.println("hydrophone off"); display.display();
-          }
             digitalWrite(hydroPowPin, LOW); //hydrophone off
             audio_power_down();  // when this is activated, seems to occassionally have trouble restarting; no LRCLK signal or RX on Teensy
             digitalWrite(SGTL_EN, LOW); // power off audio codec
             if(printDiags){
-              display.println("card off"); display.display();
+              cDisplay();
+              display.println("Sleep");
+              display.setTextSize(1);
+              display.print("H"); display.print(snooze_hour);
+              display.print(" M"); display.print(snooze_minute);
+              display.print(" S"); display.println(snooze_second);
+              display.print(t);  display.print(" ");
+              display.println(wakeTime);
+              display.print(day(wakeTime)); display.print("-");
+              display.print(month(wakeTime)); display.print("-");
+              display.print(year(wakeTime));
+              display.print(" "); display.print(hour(wakeTime));
+              display.print(":"); display.print(minute(wakeTime));
+              display.print(":"); display.println(second(wakeTime));
+              display.display();
             }
             SPI.end();
             digitalWrite(chipSelect[currentCard], HIGH); // chip select is active low
@@ -477,32 +491,27 @@ void loop() {
             // pinMode(chipSelect[currentCard], INPUT_DISABLE);
             
             // stop I2S: will be restarted by AudioInit
-            I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);
-            
-            
-            if(printDiags){
-              Serial.print("Snooze HH MM SS ");
-              Serial.print(snooze_hour);
-              Serial.print(snooze_minute);
-              Serial.println(snooze_second);
-              Serial.flush(); // make sure empty so doesn't prematurely wake
-            }           
+            I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);        
             delay(100);
-
-            alarm.setRtcTimer(snooze_hour, snooze_minute, snooze_second); // to be compatible with new snooze library
+            set_alarm(hour(wakeTime), minute(wakeTime), second(wakeTime)); // DS3231 alarm to wake
+           // alarm.setRtcTimer(snooze_hour, snooze_minute, snooze_second); // to be compatible with new snooze library
             SIM_SCGC6 &= ~SIM_SCGC6_I2S; 
             Snooze.hibernate(config_teensy32); 
-            SIM_SCGC6 |= SIM_SCGC6_I2S; // wake I2S clock (https://forum.pjrc.com/threads/45034-audio-library-wakes-up-teensy-from-hibernate)
-
+           
             /// ... Sleeping ....
             
             // Waking up
+
+            reset_alarm();
             display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  //initialize display
             cDisplay();
             display.println("Wake"); display.display();
             display.setTextSize(1);
             // if (printDiags==0) usbDisable();
+            digitalWrite(hydroPowPin, HIGH); // hydrophone on
             digitalWrite(SGTL_EN, HIGH); // power on audio codec
+            SIM_SCGC6 |= SIM_SCGC6_I2S; // wake I2S clock (https://forum.pjrc.com/threads/45034-audio-library-wakes-up-teensy-from-hibernate)
+
             digitalWrite(sdPowSelect[0], HIGH);
              
              SPI.setMOSI(7);
@@ -522,7 +531,7 @@ void loop() {
             sd.chdir(dirname);
             display.println(dirname); display.display();
 
-            digitalWrite(hydroPowPin, HIGH); // hydrophone on
+            
             delay(300);  // give time for Serial to reconnect to USB
             AudioInit(isf);
             display.println("audio init"); display.display();
@@ -802,7 +811,7 @@ void checkSD(){
     I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);
     
     while(1){
-      alarm.setRtcTimer(1, 0, 0);
+      // alarm.setRtcTimer(1, 0, 0);
       Snooze.deepSleep(config_teensy32); 
     }
   }

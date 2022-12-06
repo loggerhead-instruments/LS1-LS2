@@ -28,11 +28,11 @@ void setTime2(int thour,int tminute,int tsecond,int tday,int tmonth,int tyear)
 //  Serial.println(ecode);
 }
 
-void set_alarm(int thour, int tminute)
+void set_alarm(int thour, int tminute, int tsecond)
 {
   Wire.beginTransmission(RTCAddress);
   Wire.write(0x07); //0x0B Alarm1
-  Wire.write(0x00); //seconds
+  Wire.write(((tsecond/10)<<4) | ((tsecond%10)&0x0F)); //seconds
   Wire.write(((tminute/10)<<4) | ((tminute%10)&0x0F)); // Minutes
   Wire.write((((thour/10)&0x03)<<4) | ((thour)%10&0x0F)); //hour
   Wire.write(0x80); //alarm when hour minutes and seconds match
@@ -40,7 +40,7 @@ void set_alarm(int thour, int tminute)
 
   Wire.beginTransmission(RTCAddress);
   Wire.write(0x0E); //Control register
-  Wire.write(0x01); //enable Alarm 1 interrupt
+  Wire.write(0x05); //enable Alarm 1 interrupt
   Wire.write(0x00); //clear existing interrupts
   Wire.endTransmission();
 }
