@@ -40,7 +40,7 @@ void set_alarm(int thour, int tminute, int tsecond)
 
   Wire.beginTransmission(RTCAddress);
   Wire.write(0x0E); //Control register
-  Wire.write(0x05); //enable Alarm 1 interrupt
+  Wire.write(0x05); //enable Alarm 1 interrupt. Alarm low.
   Wire.write(0x00); //clear existing interrupts
   Wire.endTransmission();
 }

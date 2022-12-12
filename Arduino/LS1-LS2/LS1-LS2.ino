@@ -264,8 +264,9 @@ void setup() {
   pinMode(DOWN, INPUT_PULLUP);
   pinMode(SELECT, INPUT_PULLUP);
 
-  // set up interrupt from DS3231 RTC
-  digital.pinMode(21, INPUT_PULLUP, FALLING);//pin, mode, type
+  // RTC
+  pinMode(21, INPUT_PULLUP);
+
   
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  //initialize display
   delay(140);
@@ -463,9 +464,6 @@ void loop() {
               cDisplay();
               display.println("Sleep");
               display.setTextSize(1);
-              display.print("H"); display.print(snooze_hour);
-              display.print(" M"); display.print(snooze_minute);
-              display.print(" S"); display.println(snooze_second);
               display.print(t);  display.print(" ");
               display.println(wakeTime);
               display.print(day(wakeTime)); display.print("-");
@@ -481,22 +479,29 @@ void loop() {
             delay(1000);  // give card time to finish whatever it is doing
             digitalWrite(sdPowSelect[currentCard], LOW);
             
-//            pinMode(7, INPUT_DISABLE);
-//            pinMode(12, INPUT_DISABLE);
-//            pinMode(14, INPUT_DISABLE);
+            pinMode(7, INPUT_DISABLE);
+            pinMode(12, INPUT_DISABLE);
+            pinMode(14, INPUT_DISABLE);
 //            // MISO, MOSI, SCLK LOW 
 //            digitalWrite(7, HIGH);
 //            digitalWrite(12, HIGH);
 //            digitalWrite(14, HIGH);
-            // pinMode(chipSelect[currentCard], INPUT_DISABLE);
+             pinMode(chipSelect[currentCard], INPUT_DISABLE);
             
             // stop I2S: will be restarted by AudioInit
             I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);        
-            delay(100);
             set_alarm(hour(wakeTime), minute(wakeTime), second(wakeTime)); // DS3231 alarm to wake
            // alarm.setRtcTimer(snooze_hour, snooze_minute, snooze_second); // to be compatible with new snooze library
             SIM_SCGC6 &= ~SIM_SCGC6_I2S; 
-            Snooze.hibernate(config_teensy32); 
+              // set up interrupt from DS3231 RTC
+            digital.pinMode(21, INPUT_PULLUP, FALLING);//pin, mode, type
+            if(printDiags){
+              display.println("interrupt set");
+              display.display();
+            }
+            delay(2000);
+            Snooze.sleep(config_teensy32); 
+
            
             /// ... Sleeping ....
             
