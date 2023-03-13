@@ -3,7 +3,7 @@
 // THIS VERSION ONLY WORKS WITH 1 CARD
 //
 // Loggerhead Instruments
-// 2021
+// 2023
 // David Mann 
 
 // 
@@ -17,7 +17,7 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "3.00";
+char codeVersion[5] = "3.20";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
@@ -98,6 +98,8 @@ uint32_t freeMB[4];
 uint32_t filesPerCard[4];
 volatile int currentCard = 0;
 boolean newCard = 0;
+
+#define LEDGREEN 16
 
 // Pins used by audio shield
 // https://www.pjrc.com/store/teensy3_audio.html
@@ -237,6 +239,9 @@ void setup() {
   delay(100);
   RTC_CR = RTC_CR_SC16P | RTC_CR_SC8P | RTC_CR_SC2P | RTC_CR_OSCE;
   delay(100);
+
+  pinMode(LEDGREEN, OUTPUT);
+  digitalWrite(LEDGREEN, HIGH);
 
   Serial.println(RTC_TSR);
   delay(1000);
@@ -519,7 +524,7 @@ void continueRecording() {
       // into a 512 byte buffer.  micro SD disk access
       // is most efficient when full (or multiple of) 512 byte sector size
       // writes are used.
-      //digitalWrite(ledGreen, HIGH);
+      digitalWrite(LEDGREEN, HIGH);
       for(int ii=0;ii<NREC;ii++)
       { byte *ptr = buffer+ii*512;
         memcpy(ptr, queue1.readBuffer(), 256);
@@ -527,6 +532,7 @@ void continueRecording() {
         memcpy(ptr+256, queue1.readBuffer(), 256);
         queue1.freeBuffer();
       }
+      digitalWrite(LEDGREEN, LOW);
       if(file.write(buffer, NREC*512)==-1) resetFunc(); //audio to .wav file
       buf_count += NREC;
     }
@@ -536,12 +542,14 @@ void continueRecording() {
     if (queue1.available() >= NREC) {
       // one buffer is 512 bytes = 256 samples
       // readBuffer returns an int16 * that contains 256 bytes
+      digitalWrite(LEDGREEN, HIGH);
       for(int ii=0;ii<NREC;ii++){ 
         byte *ptr = buffer+(ii*512);
         mxLR(ptr, queue1.readBuffer(), queue2.readBuffer()); // interleave 256 points from each
         queue1.freeBuffer(); 
         queue2.freeBuffer();  // free buffer
       }
+      digitalWrite(LEDGREEN, LOW);
       if(file.write(buffer, NREC*512)==-1) resetFunc(); //audio to .wav file
       
       buf_count += NREC;
