@@ -280,6 +280,10 @@ void setup() {
   audio_srate = lhi_fsamps[isf];
 //WMXZ  audioIntervalSec = 256.0 / audio_srate; //buffer interval in seconds
 
+  t = getTeensy3Time(1);  // sync teensy rtc to DS3231
+  if (t < 1678737100) setTime2(16, 0, 0, 1, 3, 2023 - 2000U);
+  t = getTeensy3Time(1);  // sync teensy rtc to DS3231
+
   AudioInit(isf); // load current gain setting
   manualSettings();
   audio_srate = lhi_fsamps[isf];
