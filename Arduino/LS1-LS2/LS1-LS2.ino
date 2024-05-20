@@ -17,7 +17,7 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "3.20";
+char codeVersion[5] = "3.30";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
@@ -142,6 +142,8 @@ int snooze_second;
 int buf_count;
 unsigned long nbufs_per_file;
 boolean settingsChanged = 0;
+
+volatile uint16_t delayDays = 0;
 
 unsigned long file_count;
 char filename[100];
@@ -298,7 +300,58 @@ void setup() {
   startTime = t;
   startTime -= startTime % roundSeconds;  
   startTime += roundSeconds; //move forward
+  startTime += delayDays * 86400;
   stopTime = startTime + rec_dur;  // this will be set on start of recording
+
+
+  // delay start
+  if(delayDays > 0){
+    // power down SD, SGTL
+    digitalWrite(hydroPowPin, LOW);
+    digitalWrite(SDPOW1, LOW);
+    
+    // sleep walk (~3.7 mA current)
+    long time_to_first_rec = startTime - t;
+    Serial.print("Time to first record ");
+    Serial.println(time_to_first_rec);
+    for(int x = 0; x<30; x++){
+      cDisplay();
+      display.println("Sleep");
+      t = getTeensy3Time(1);
+      display.setTextSize(1);
+      display.println("Start");
+      displayClock(startTime, 26);
+      displayClock(t, BOTTOM);
+      display.display();
+      delay(1000);
+    }
+
+    while(time_to_first_rec > 60){
+      display.ssd1306_command(SSD1306_DISPLAYOFF); // turn off display during recording
+      digitalWrite(LEDGREEN, HIGH);
+      alarm.setRtcTimer(0, 0, 20); // sleep 20 seconds
+      delay(10);
+      digitalWrite(LEDGREEN, LOW);
+      Snooze.sleep(config_teensy32);
+      //Snooze.deepSleep( config_teensy32 );
+      /// .... sleeping ...
+      digitalWrite(SGTL_EN, HIGH); // power on so I2C works
+      t = getTeensy3Time(1);
+      digitalWrite(SGTL_EN, LOW);
+      time_to_first_rec = startTime - t;
+    }
+    digitalWrite(hydroPowPin, HIGH);
+    digitalWrite(SDPOW1, HIGH);
+    digitalWrite(SGTL_EN, HIGH);
+    delay(1000);
+    // Initialize the SD card
+    SPI.setMOSI(7);
+    SPI.setSCK(14);
+    SPI.setMISO(12);
+    sd.begin(chipSelect[0]);
+    AudioInit(isf);
+  }
+
 
   if (recMode==MODE_DIEL) setDielTime();  // adjust start time to diel mode
   

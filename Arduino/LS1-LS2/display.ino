@@ -51,6 +51,7 @@ char *menuItem[] = {"Start",
                      "Time",
                      "Battery",
                      "Channel",
+                     "Delay",
                      "Mode",
                      "Diel"
                      };
@@ -63,6 +64,7 @@ char *helpText[] = {"ENTER:Start RecordingUP/DN:scroll menu",
                     "ENTER:Set Date/Time\nUP/DN:scroll menu",
                     "ENTER:Set #Bat Packs\nUP/DN:scroll menu",
                     "ENTER:Set #Channels\nUP/DN:scroll menu",
+                    "ENTER:Set Delay Days\nUP/DN:scroll menu",
                     "ENTER:Set Mode\nUP/DN:scroll menu",
                     "ENTER:Set Diel Time\nUP/DN:scroll menu"
                     };
@@ -92,8 +94,9 @@ void printZero(int val){
 #define setDateTime 5
 #define setBatPacks 6
 #define setChannels 7
-#define setMode 8
-#define setDielTime 9
+#define setDelay 8
+#define setMode 9
+#define setDielTime 10
 
 void manualSettings(){
   boolean startRec = 0, startUp, startDown;
@@ -213,6 +216,10 @@ void manualSettings(){
     NCHAN = 1;
     EEPROM.write(16, NCHAN); //byte
   }
+  if (delayDays>365) {
+    delayDays = 0;
+    writeEEPROMlong(18, delayDays);
+  }
 
   // Main Menu Loop
    while(startRec==0){
@@ -223,10 +230,10 @@ void manualSettings(){
     // Check for button press
     boolean selectVal = digitalRead(UP);
     if(recMode==MODE_DIEL){
-      maxMenuItem = 10;
+      maxMenuItem = 11;
     }
     else{
-      maxMenuItem = 9;
+      maxMenuItem = 10;
     }
     if(selectVal==0){
       while(digitalRead(UP)==0){
@@ -448,6 +455,19 @@ void manualSettings(){
           while(digitalRead(SELECT)==0); // wait to let go
           curMenuItem = setStart;
           break;
+
+          case setDelay:
+            while(digitalRead(SELECT)==1){
+                delayDays = updateVal(delayDays, 0, 365);
+                cDisplay();
+                display.print("delayDays:");
+                display.print(delayDays);
+                display.display();
+                delay(2);
+              }
+              while(digitalRead(SELECT)==0); // wait to let go
+              curMenuItem = setStart;
+              break;
 
         case setBatPacks:
           while(digitalRead(SELECT)==1){
@@ -768,6 +788,7 @@ void readEEPROM(){
   nBatPacks = EEPROM.read(14);
   gainSetting = EEPROM.read(15);
   NCHAN = EEPROM.read(16);
+  delayDays = readEEPROMlong(18);
 }
 
 union {
@@ -803,6 +824,7 @@ void writeEEPROM(){
   EEPROM.write(14, nBatPacks); //byte
   EEPROM.write(15, gainSetting); //byte
   EEPROM.write(16, NCHAN); //byte
+  writeEEPROMlong(18, delayDays); //long
 }
 
 void displayMenu(){
