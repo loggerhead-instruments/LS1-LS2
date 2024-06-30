@@ -1,0 +1,11 @@
+Removed Pin From Net: NetName=DGND Pin=C1-1
+Removed Pin From Net: NetName=V_BATT Pin=C1-2
+Removed Pin From Net: NetName=V_BATT Pin=D2-A
+Removed Pin From Net: NetName=V_BATT Pin=U1-1
+Removed Pin From Net: NetName=DGND Pin=U1-2
+Removed Pin From Net: NetName=DGND Pin=U1-3
+Removed Pin From Net: NetName=DGND Pin=U1-5
+Removed Member From Class: ClassName=LS1-LS2 Member=C1
+Removed Member From Class: ClassName=LS1-LS2 Member=D2
+Removed Member From Class: ClassName=LS1-LS2 Member=U1
+Added Pin To Net: NetName=V_BATT Pin=P4-2
