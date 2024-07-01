@@ -1,0 +1,10 @@
+Output: Generates pick and place files
+Type  : Pick Place
+From  : Variant [[No Variations]] of Project [LS1-LS2.PrjPCB]
+   Generated File[Pick Place for LS1-LS2.csv]
+
+
+Files Generated   : 1
+Documents Printed : 0
+
+Finished Output Generation At 1:49:53 PM On 7/1/2024
