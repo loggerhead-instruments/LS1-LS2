@@ -280,7 +280,7 @@ void setup() {
 //WMXZ  audioIntervalSec = 256.0 / audio_srate; //buffer interval in seconds
 
   t = getTeensy3Time(1);  // sync teensy rtc to DS3231
-  if (t < 1678737100) setTime2(16, 0, 0, 1, 8, 2024 - 2000U);
+  if (t < 1678737100) setTime2(16, 0, 0, 11, 1, 2024 - 2000U);
   t = getTeensy3Time(1);  // sync teensy rtc to DS3231
 
   AudioInit(isf); // load current gain setting
@@ -797,10 +797,11 @@ void read_myID() {
 float readVoltage(){
    float  voltage = 0.0;
    // Serial.println(analogRead(vSense));
-   for(int n = 0; n<10; n++){
+   for(int n = 0; n<1000; n++){
     voltage += (float) analogRead(vSense);
    }
-   voltage = (0.00065 * voltage) - 0.3357;   //y=0.0065x-0.3357 measured ADC values 3.7V->609 5V->812 R1=200k R2=68k
+   // Serial.println(voltage / 1000.0);
+   voltage = (voltage / 173868.0);   // experimentally determined....it varies ~5% each time powered on
    return voltage;
 }
 

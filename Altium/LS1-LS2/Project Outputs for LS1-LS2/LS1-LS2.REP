@@ -2,6 +2,32 @@
 FileName = LS1-LS2.GBR
 AutoAperture = True
 *************************************************************
+Generating : Mechanical 15
+      File : LS1-LS2.GM15
+
+    Adding Layer      : Mechanical 15
+
+
+Used DCodes :
+    D16
+    D104
+*************************************************************
+
+*************************************************************
+Generating : Mechanical 13
+      File : LS1-LS2.GM13
+
+    Adding Layer      : Mechanical 13
+
+
+Used DCodes :
+    D12
+    D14
+    D15
+    D16
+*************************************************************
+
+*************************************************************
 Generating : Internal Plane 2
       File : LS1-LS2.GP2
 
@@ -11,7 +37,7 @@ Generating : Internal Plane 2
 
 
 Used DCodes :
-    D10
+    D11
     D92
     D93
     D94
@@ -33,10 +59,10 @@ Generating : Bottom Layer
 
 
 Used DCodes :
-    D14
-    D37
-    D72
-    D79
+    D10
+    D15
+    D20
+    D73
     D80
     D85
     D86
@@ -58,7 +84,7 @@ Generating : Bottom Pad Master
 
 
 Used DCodes :
-    D37
+    D20
     D86
     D87
     D88
@@ -77,7 +103,6 @@ Generating : Top Pad Master
 
 
 Used DCodes :
-    D16
     D17
     D18
     D19
@@ -103,7 +128,8 @@ Used DCodes :
     D39
     D40
     D41
-    D43
+    D42
+    D44
     D83
     D84
     D86
@@ -127,6 +153,7 @@ Used DCodes :
     D13
     D14
     D15
+    D16
 *************************************************************
 
 *************************************************************
@@ -141,7 +168,6 @@ Generating : Top Paste
 
 
 Used DCodes :
-    D16
     D17
     D18
     D19
@@ -169,6 +195,33 @@ Used DCodes :
     D41
     D42
     D43
+    D44
+*************************************************************
+
+*************************************************************
+Generating : Bottom Paste
+      File : LS1-LS2.GBP
+
+    Adding Layer      : Bottom Paste
+
+    Adding Layer      : Bottom Layer
+
+    Adding Layer      : Multi-Layer
+
+
+Used DCodes :
+    D102
+*************************************************************
+
+*************************************************************
+Generating : Bottom Overlay
+      File : LS1-LS2.GBO
+
+    Adding Layer      : Bottom Overlay
+
+
+Used DCodes :
+    D11
 *************************************************************
 
 *************************************************************
@@ -179,33 +232,7 @@ Generating : Mechanical 1
 
 
 Used DCodes :
-    D10
-*************************************************************
-
-*************************************************************
-Generating : Mechanical 13
-      File : LS1-LS2.GM13
-
-    Adding Layer      : Mechanical 13
-
-
-Used DCodes :
     D11
-    D13
-    D14
-    D15
-*************************************************************
-
-*************************************************************
-Generating : Mechanical 15
-      File : LS1-LS2.GM15
-
-    Adding Layer      : Mechanical 15
-
-
-Used DCodes :
-    D15
-    D104
 *************************************************************
 
 *************************************************************
@@ -218,7 +245,7 @@ Generating : Internal Plane 1
 
 
 Used DCodes :
-    D10
+    D11
     D92
     D93
     D94
@@ -242,8 +269,8 @@ Generating : Top Layer
 
 Used DCodes :
     D10
-    D14
-    D16
+    D11
+    D15
     D17
     D18
     D19
@@ -269,9 +296,9 @@ Used DCodes :
     D39
     D40
     D41
-    D43
-    D72
-    D79
+    D42
+    D44
+    D73
     D80
     D81
     D82
@@ -298,7 +325,6 @@ Generating : Top Solder
 
 
 Used DCodes :
-    D44
     D45
     D46
     D47
@@ -333,6 +359,7 @@ Used DCodes :
     D76
     D77
     D78
+    D79
 *************************************************************
 
 *************************************************************
@@ -347,39 +374,13 @@ Generating : Bottom Solder
 
 
 Used DCodes :
-    D65
-    D73
+    D48
     D74
     D75
     D76
     D77
     D78
+    D79
     D103
-*************************************************************
-
-*************************************************************
-Generating : Bottom Paste
-      File : LS1-LS2.GBP
-
-    Adding Layer      : Bottom Paste
-
-    Adding Layer      : Bottom Layer
-
-    Adding Layer      : Multi-Layer
-
-
-Used DCodes :
-    D102
-*************************************************************
-
-*************************************************************
-Generating : Bottom Overlay
-      File : LS1-LS2.GBO
-
-    Adding Layer      : Bottom Overlay
-
-
-Used DCodes :
-    D10
 *************************************************************
 

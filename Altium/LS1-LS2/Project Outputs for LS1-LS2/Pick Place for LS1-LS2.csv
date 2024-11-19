@@ -4,9 +4,9 @@ C:\w\LS1-LS2\Altium\LS1-LS2\Project Outputs for LS1-LS2\Pick Place for LS1-LS2.c
 ========================================================================================================================
 File Design Information:
 
-Date:       01/07/24
-Time:       13:49
-Revision:   17e54a79d26e8e60cb12dcbc31eabca430f2a131
+Date:       09/09/24
+Time:       09:05
+Revision:   1e1c19cf80afff85551d364a2f84ee3efa674e24
 Variant:    No variations
 Units used: mm
 
@@ -38,18 +38,18 @@ Units used: mm
 "P2","Header 2","TopLayer","HDR1X2","33.6550","-30.8610","270","Header, 2-Pin"
 "P3","CoinCellHolder","BottomLayer","CoinCellHolder","15.3220","-34.1630","0",""
 "P4","switch EG1218","TopLayer","HDR1X3","0.7620","-48.6410","270","Header, 3-Pin"
-"P5","pushbutton","TopLayer","SOP4","56.4100","-67.2190","180",""
-"P6","microSD Hirose","TopLayer","DM3D_microSD","24.1935","-59.5100","90",""
-"P7","pushbutton","TopLayer","SOP4","44.3450","-67.2190","180",""
+"P5","pushbutton","TopLayer","SOP4","53.8700","-67.4730","180",""
+"P6","microSD Hirose","TopLayer","DM3D_microSD","24.1935","-63.3200","90",""
+"P7","pushbutton","TopLayer","SOP4","41.8050","-67.4730","180",""
 "P8","Display","TopLayer","HDR1X4","43.4340","-37.3380","0","Header, 4-Pin"
-"P9","pushbutton","TopLayer","SOP4","68.4750","-67.2190","180",""
+"P9","pushbutton","TopLayer","SOP4","65.9350","-67.4730","180",""
 "P11","HYDROPHONE","TopLayer","HDR1X3","59.1820","-42.5450","270","Header, 3-Pin"
 "R1","200k .01%","TopLayer","3-0603","0.2540","-27.0510","270","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
 "R2","68k 0.05%","TopLayer","3-0603","1.7780","-27.0510","90","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
-"R3","10k","TopLayer","3-0603","60.0710","-63.1190","180","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
+"R3","10k","TopLayer","3-0603","57.5310","-63.3730","180","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
 "R4","10k","TopLayer","3-0603","20.0660","-49.6570","0","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
-"R5","10k","TopLayer","3-0603","48.0060","-63.1190","180","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
-"R6","10k","TopLayer","3-0603","71.5010","-62.9920","180","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
+"R5","10k","TopLayer","3-0603","45.4660","-63.3730","180","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
+"R6","10k","TopLayer","3-0603","68.9610","-63.2460","180","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
 "U3","LP3985IM5-3.3","TopLayer","MF05A_N","44.3230","-2.2860","270","Micropower, 150mA Low-Noise Ultra Low-Dropout CMOS Voltage Regulator"
 "U4","SGTL5000","TopLayer","QFN32","54.3560","-5.2070","0","SGTL5000"
 "U5","LP3985IM5-3.3","TopLayer","MF05A_N","52.9590","-29.9760","90","Micropower, 150mA Low-Noise Ultra Low-Dropout CMOS Voltage Regulator"
@@ -70,7 +70,7 @@ Units used: mm
 "C33","0.01uF","TopLayer","0402","6.6959","-47.3797","180","Ceramic Chip Capacitor - Standard"
 "D3","Shottky","TopLayer","DFLS130","7.4870","-0.7620","0",""
 "P13","microUSB","TopLayer","microUSB-B","32.8870","-1.1230","180",""
-"P14","20021121-00010C4LF","TopLayer","AMPHENOL_20021121-00010C4LF","22.7330","-1.7330","0","Conn Rect BrdtoBrd UnshroudedHeader 10Cnts SMT 1.27x1.27mmSpng | Amphenol FCI (Amphenol CS) 20021121-00010C4LF"
+"P14","20021121-00010C4LF","TopLayer","AMPHENOL_20021121-00010C4LF","22.7330","-1.7330","0","Conn Rect BrdtoBrd UnshroudedHeader 10Cnts SMT 1.27x1.27mmSpng"
 "R10","DNP","TopLayer","3-0603","34.4170","-9.1440","90","Precision Thick Film Chip Resistor, 10 Ohm to 1M Ohm Range, 1% and 0.5% Tolerance, 0603 Size, 0.063 W"
 "U9","ADP1712AUJZ-3.3-R7","TopLayer","MF05A_N","10.7599","-48.3957","180","Micropower, 150mA Low-Noise Ultra Low-Dropout CMOS Voltage Regulator"
 "Y1","FA-20H_16.0000MF10Z-AJ3","TopLayer","XTAL_FA-20H_16.0000MF10Z-AJ3","16.8910","-6.8580","90","16 MHz ±10ppm Crystal 8pF 80 Ohms 4-SMD, No Lead"

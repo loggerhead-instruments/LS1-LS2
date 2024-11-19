@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------------------------------------------------------
-NCDrill File Report For: LS1-LS2.PcbDoc   7/1/2024  1:49:31 PM
+NCDrill File Report For: LS1-LS2.PcbDoc   9/9/2024  9:04:43 AM
 ----------------------------------------------------------------------------------------------------------------------------------
 
 Layer Pair : Top Layer to Bottom Layer
@@ -8,7 +8,7 @@ ASCII SlotHoles File : LS1-LS2-SlotHoles.TXT
 
 Tool       Hole Size               Hole Tolerance               Hole Type       Hole Count   Plated         Tool Travel
 ----------------------------------------------------------------------------------------------------------------------------------
-T1      12mil (0.305mm)                                           Round             81        PTH        19.71inch (500.60mm)
+T1      12mil (0.305mm)                                           Round             81        PTH        19.64inch (498.97mm)
 T2      28mil (0.711mm)                                           Round             7         PTH        4.38inch (111.33mm)
 T3      32mil (0.8mm)                                             Slot              2         PTH        0.60inch (15.22mm)
 T4      33mil (0.85mm)                                            Round             2         PTH        0.20inch (5.00mm)
