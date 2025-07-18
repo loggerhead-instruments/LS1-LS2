@@ -1,0 +1,75 @@
+Removed Pin From Net: NetName=VIN Pin=C11-1
+Removed Pin From Net: NetName=VIN Pin=C16-1
+Removed Pin From Net: NetName=VIN Pin=C22-1
+Removed Pin From Net: NetName=VIN Pin=C25-1
+Removed Pin From Net: NetName=VIN Pin=U3-1
+Removed Pin From Net: NetName=VIN Pin=U5-1
+Removed Pin From Net: NetName=VIN Pin=U6-1
+Removed Pin From Net: NetName=VIN Pin=U7-1
+Change Component Description : Designator=P14 Old Description=Conn Rect BrdtoBrd UnshroudedHeader 10Cnts SMT 1.27x1.27mmSpng New Description=Conn Rect BrdtoBrd UnshroudedHeader 10Cnts SMT 1.27x1.27mmSpng | Amphenol FCI (Amphenol CS) 20021121-00010C4LF
+Added Component: Designator=P10(HDR1X2)
+Add component (AddParameter): Name = "LatestRevisionDate"; Value = "17-Jul-2002"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LatestRevisionNote"; Value = "Re-released for DXP Platform."; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Publisher"; Value = "Altium Limited"; VariantName = "[No Variations]"
+Added Component: Designator=P15(HDR1X2)
+Add component (AddParameter): Name = "LatestRevisionDate"; Value = "17-Jul-2002"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LatestRevisionNote"; Value = "Re-released for DXP Platform."; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Publisher"; Value = "Altium Limited"; VariantName = "[No Variations]"
+Added Component: Designator=P16(HDR1X2)
+Add component (AddParameter): Name = "LatestRevisionDate"; Value = "17-Jul-2002"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LatestRevisionNote"; Value = "Re-released for DXP Platform."; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Publisher"; Value = "Altium Limited"; VariantName = "[No Variations]"
+Added Component: Designator=R11(3-0603)
+Add component (AddParameter): Name = "Code_IPC"; Value = "1608 [0603]"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ComponentLink1Description"; Value = "Manufacturer Link"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ComponentLink1URL"; Value = "http://www.panasonic.com/industrial/components/resistive_products.htm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ComponentLink2Description"; Value = "Datasheet"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ComponentLink2URL"; Value = "http://www.panasonic.com/industrial/components/pdf/AOA0000CE2.pdf"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LatestRevisionDate"; Value = "19-Mar-2004"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LatestRevisionNote"; Value = "Silkscreen size reduced."; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "PackageDocument"; Value = "Mar-2003"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "PackageReference"; Value = "3-0603"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Published"; Value = "17-Dec-2003"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Publisher"; Value = "Altium Limited"; VariantName = "[No Variations]"
+Added Component: Designator=R12(3-0603)
+Add component (AddParameter): Name = "Code_IPC"; Value = "1608 [0603]"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ComponentLink1Description"; Value = "Manufacturer Link"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ComponentLink1URL"; Value = "http://www.panasonic.com/industrial/components/resistive_products.htm"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ComponentLink2Description"; Value = "Datasheet"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "ComponentLink2URL"; Value = "http://www.panasonic.com/industrial/components/pdf/AOA0000CE2.pdf"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LatestRevisionDate"; Value = "19-Mar-2004"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "LatestRevisionNote"; Value = "Silkscreen size reduced."; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "PackageDocument"; Value = "Mar-2003"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "PackageReference"; Value = "3-0603"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Published"; Value = "17-Dec-2003"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Publisher"; Value = "Altium Limited"; VariantName = "[No Variations]"
+Added Pin To Net: NetName=AGND Pin=P10-1
+Added Pin To Net: NetName=AGND Pin=P16-2
+Added Pin To Net: NetName=VIN Pin=R11-1
+Added Pin To Net: NetName=CAL_PORT Pin=P15-2
+Added Net: Name=CAL_PORT
+Added Pin To Net: NetName=SHIELD Pin=P15-1
+Added Pin To Net: NetName=SHIELD Pin=P16-1
+Added Net: Name=SHIELD
+Added Pin To Net: NetName=VEXT Pin=P10-2
+Added Pin To Net: NetName=VEXT Pin=R12-2
+Added Net: Name=VEXT
+Added Pin To Net: NetName=VIN_HYDRO Pin=C11-1
+Added Pin To Net: NetName=VIN_HYDRO Pin=C16-1
+Added Pin To Net: NetName=VIN_HYDRO Pin=C22-1
+Added Pin To Net: NetName=VIN_HYDRO Pin=C25-1
+Added Pin To Net: NetName=VIN_HYDRO Pin=R11-2
+Added Pin To Net: NetName=VIN_HYDRO Pin=R12-1
+Added Pin To Net: NetName=VIN_HYDRO Pin=U3-1
+Added Pin To Net: NetName=VIN_HYDRO Pin=U5-1
+Added Pin To Net: NetName=VIN_HYDRO Pin=U6-1
+Added Pin To Net: NetName=VIN_HYDRO Pin=U7-1
+Added Net: Name=VIN_HYDRO
+Change Class Name : Old Net Name=LS1-LS2 New Net Name=LS1-LS2-CAL
+Added Member To Class: ClassName=LS1-LS2_audio Member=Component P10 Header 2
+Added Member To Class: ClassName=LS1-LS2_audio Member=Component P15 Header 2
+Added Member To Class: ClassName=LS1-LS2_audio Member=Component P16 Header 2
+Added Member To Class: ClassName=LS1-LS2_audio Member=Component R11 DNP
+Added Member To Class: ClassName=LS1-LS2_audio Member=Component R12 0X
+Added Room: Name=LS1-LS2-CAL
+Added Room: Name=LS1-LS2_audio

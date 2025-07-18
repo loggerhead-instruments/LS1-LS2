@@ -1,0 +1,11 @@
+Added Component: Designator=J1(CUI_MJ1-3510-SMT)
+Add component (AddParameter): Name = "Availability"; Value = "Unavailable"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "MF"; Value = "{'manufacturer': u'CUI'}"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "MP"; Value = "MJ1-3510-SMT"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Package"; Value = "None"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Price"; Value = "None"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = ""; VariantName = "[No Variations]"
+Added Pin To Net: NetName=AGND Pin=J1-1
+Added Pin To Net: NetName=CAL_PORT Pin=J1-2
+Added Pin To Net: NetName=AGND Pin=J1-3
+Added Member To Class: ClassName=LS1-LS2_audio Member=Component J1 MJ1-3510-SMT
