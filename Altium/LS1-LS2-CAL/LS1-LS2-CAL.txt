@@ -1,0 +1,24 @@
+Board Information Report
+Filename     : C:\w\LS1-LS2\Altium\LS1-LS2-CAL\LS1-LS2-CAL.PcbDoc
+Date         : 7/24/2025
+Time         : 10:32:08 AM
+Time Elapsed : 00:00:00
+
+General
+    Board Size, 3550milsx3000mils
+    Components on board, 72
+count : 2
+
+Non-Plated Hole Size, Pads, Vias
+    62.992mils, 2, 0
+count : 1
+
+Plated Hole Size, Pads, Vias
+    0mils, 291, 0
+    12mils, 0, 87
+    28mils, 0, 7
+    33.465mils, 2, 0
+    35.433mils, 19, 0
+    78.74mils, 2, 0
+    125mils, 4, 0
+count : 7

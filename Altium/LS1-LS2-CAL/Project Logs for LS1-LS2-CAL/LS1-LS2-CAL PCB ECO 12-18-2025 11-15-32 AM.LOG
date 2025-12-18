@@ -1,0 +1,9 @@
+Change Component Footprint: Designator=J1 Old Footprint=CUI_MJ1-3510-SMT New Footprint=SAMESKY_MJ-3536N
+Change Component Comment : Designator=J1 Old Comment=MJ1-3510-SMT New Comment=MJ-3536N
+Change component parameters: Designator = "J1" ("J1"); Footprint = "CUI_MJ1-3510-SMT"; UniqueID = "\WZEGMSCB" ("\WZEGMSCB")
+Change component parameters (AddParameter): Name = "Check_prices"; Value = "https://www.snapeda.com/parts/MJ-3536N/Same+Sky/view-part/?ref=eda"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "MF"; Value = "Same Sky"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "MP"; Value = "MJ-3536N"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Package"; Value = "Package"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "SnapEDA_Link"; Value = "https://www.snapeda.com/parts/MJ-3536N/Same+Sky/view-part/?ref=snap"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Value"; Value = ""; VariantName = "[No Variations]"

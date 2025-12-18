@@ -1,0 +1,11 @@
+Added Component: Designator=J1(SAMESKY_MJ-3536N)
+Add component (AddParameter): Name = "Check_prices"; Value = "https://www.snapeda.com/parts/MJ-3536N/Same+Sky/view-part/?ref=eda"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "MF"; Value = "Same Sky"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "MP"; Value = "MJ-3536N"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Package"; Value = "Package"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "SnapEDA_Link"; Value = "https://www.snapeda.com/parts/MJ-3536N/Same+Sky/view-part/?ref=snap"; VariantName = "[No Variations]"
+Add component (AddParameter): Name = "Value"; Value = ""; VariantName = "[No Variations]"
+Added Pin To Net: NetName=AGND Pin=J1-1
+Added Pin To Net: NetName=CAL_PORT Pin=J1-2
+Added Pin To Net: NetName=AGND Pin=J1-3
+Added Member To Class: ClassName=LS1-LS2_audio Member=Component J1 MJ-3536N
