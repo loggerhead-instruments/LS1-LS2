@@ -45,6 +45,29 @@ void set_alarm(int thour, int tminute)
   Wire.endTransmission();
 }
 
+void set_alarm_at(time_t wakeTime)
+{
+  int tsecond = second(wakeTime);
+  int tminute = minute(wakeTime);
+  int thour = hour(wakeTime);
+
+  reset_alarm(); // clear any pending alarm
+
+  Wire.beginTransmission(RTCAddress);
+  Wire.write(0x07); // Alarm 1 registers
+  Wire.write(((tsecond/10)<<4) | (tsecond%10));       // seconds, A1M1=0
+  Wire.write(((tminute/10)<<4) | (tminute%10));       // minutes, A1M2=0
+  Wire.write((((thour/10)&0x03)<<4) | (thour%10));    // hours,   A1M3=0
+  Wire.write(0x80);                                     // day,     A1M4=1 (match h:m:s)
+  Wire.endTransmission();
+
+  Wire.beginTransmission(RTCAddress);
+  Wire.write(0x0E); // Control register
+  Wire.write(0x05); // INTCN=1, A1IE=1 (enable Alarm 1 interrupt)
+  Wire.write(0x00); // clear status flags
+  Wire.endTransmission();
+}
+
 void reset_alarm()
 {
   Wire.beginTransmission(RTCAddress);

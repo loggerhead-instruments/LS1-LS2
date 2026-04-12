@@ -17,7 +17,7 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "4.00";
+char codeVersion[5] = "4.10";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
@@ -90,6 +90,7 @@ const int vSense = 21;
 #define CS1 10
 #define SDPOW1 20
 #define SGTL_EN 6
+#define DS3231_INT_PIN 16
 int chipSelect[4];
 int sdPowSelect[4];
 uint32_t freeMB[4];
@@ -133,9 +134,6 @@ int recMode = MODE_NORMAL;
 unsigned long rec_dur = 60;
 unsigned long rec_int = 60;
 
-int snooze_hour;
-int snooze_minute;
-int snooze_second;
 int buf_count;
 unsigned long nbufs_per_file;
 boolean settingsChanged = 0;
@@ -147,9 +145,9 @@ char filename[100];
 char dirname[20];
 int folderMonth;
 
-SnoozeAlarm alarm;
+SnoozeDigital digital;
 SnoozeAudio snooze_audio;
-SnoozeBlock config_teensy32(snooze_audio, alarm);
+SnoozeBlock config_teensy32(snooze_audio, digital);
 
 // SD_FAT_TYPE = 0 for SdFat/File as defined in SdFatConfig.h,
 // 1 for FAT16/FAT32, 2 for exFAT, 3 for FAT16/FAT32 and exFAT.
@@ -230,25 +228,14 @@ void setup() {
   Serial.begin(baud);
   delay(500);
 
-  RTC_CR = 0; // disable RTC
-  delay(100);
-  //Serial.println(RTC_CR,HEX);
-  // change capacitance to 26 pF (12.5 pF load capacitance)
-  RTC_CR = RTC_CR_SC16P | RTC_CR_SC8P | RTC_CR_SC2P; 
-  delay(100);
-  RTC_CR = RTC_CR_SC16P | RTC_CR_SC8P | RTC_CR_SC2P | RTC_CR_OSCE;
-  delay(100);
+  // Internal 32.768 kHz oscillator disabled — using DS3231 external RTC
+  RTC_CR = 0;
 
   pinMode(LEDGREEN, OUTPUT);
   digitalWrite(LEDGREEN, HIGH);
-
-  Serial.println(RTC_TSR);
-  delay(1000);
-  Serial.println(RTC_TSR);
-  delay(1000);
-  Serial.println(RTC_TSR);
   
   Wire.begin();
+  digital.pinMode(DS3231_INT_PIN, INPUT_PULLUP, FALLING); // DS3231 INT wake from deep sleep
   pinMode(vSense, INPUT);
   analogReference(INTERNAL);
   
@@ -324,15 +311,16 @@ void setup() {
     }
 
     while(time_to_first_rec > 60){
-      display.ssd1306_command(SSD1306_DISPLAYOFF); // turn off display during recording
+      display.ssd1306_command(SSD1306_DISPLAYOFF);
       digitalWrite(LEDGREEN, HIGH);
-      alarm.setRtcTimer(0, 0, 20); // sleep 20 seconds
+      t = getTeensy3Time(0);
+      set_alarm_at(t + 20); // DS3231 alarm in 20 seconds
       delay(10);
       digitalWrite(LEDGREEN, LOW);
-      Snooze.sleep(config_teensy32);
-      //Snooze.deepSleep( config_teensy32 );
+      Snooze.deepSleep(config_teensy32);
       /// .... sleeping ...
       digitalWrite(SGTL_EN, HIGH); // power on so I2C works
+      reset_alarm();
       t = getTeensy3Time(1);
       digitalWrite(SGTL_EN, LOW);
       time_to_first_rec = startTime - t;
@@ -353,17 +341,6 @@ void setup() {
   if (recMode==MODE_DIEL) setDielTime();  // adjust start time to diel mode
   
   nbufs_per_file = (long) (ceil(((rec_dur * audio_srate / 256.0) / (float) NREC)) * (float) NREC) * NCHAN;
-  long ss = rec_int - wakeahead;
-  if (ss<0) ss=0;
-  snooze_hour = floor(ss/3600);
-  ss -= snooze_hour * 3600;
-  snooze_minute = floor(ss/60);
-  ss -= snooze_minute * 60;
-  snooze_second = ss;
-  Serial.print("Snooze HH MM SS ");
-  Serial.print(snooze_hour);
-  Serial.print(snooze_minute);
-  Serial.println(snooze_second);
 
   Serial.print("rec dur ");
   Serial.println(rec_dur);
@@ -490,66 +467,57 @@ void loop() {
       else{
         stopRecording();
         checkSD();
-        long ss = startTime - getTeensy3Time(0) - wakeahead;
-        if (ss<0) ss=0;
-        snooze_hour = floor(ss/3600);
-        ss -= snooze_hour * 3600;
-        snooze_minute = floor(ss/60);
-        ss -= snooze_minute * 60;
-        snooze_second = ss;
-        
-        if( (snooze_hour * 3600) + (snooze_minute * 60) + snooze_second >=10){
+        long sleepSeconds = startTime - getTeensy3Time(0) - wakeahead;
+        if (sleepSeconds < 0) sleepSeconds = 0;
+
+        if(sleepSeconds >= 10){
+            time_t wakeTime = getTeensy3Time(0) + sleepSeconds;
+            boolean sdPoweredDown = (sleepSeconds >= 60);
+
             digitalWrite(hydroPowPin, LOW); //hydrophone off
-            audio_power_down();  // when this is activated, seems to occassionally have trouble restarting; no LRCLK signal or RX on Teensy
-//            digitalWrite(sdPowSelect[currentCard], LOW);
-//            digitalWrite(chipSelect[currentCard], LOW);
-//            // MISO, MOSI, SCLK LOW
-//            digitalWrite(7, LOW);
-//            digitalWrite(12, LOW);
-//            digitalWrite(14, LOW);
-//            pinMode(7, INPUT_DISABLE);
-//            pinMode(12, INPUT_DISABLE);
-//            pinMode(14, INPUT_DISABLE);
-//            pinMode(chipSelect[currentCard], INPUT_DISABLE);
-            // de-select audio
-            I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE);
-            
-            
+            audio_power_down();
+            I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE); // de-select audio
+
+            if(sdPoweredDown){
+              digitalWrite(sdPowSelect[currentCard], LOW);
+              digitalWrite(chipSelect[currentCard], LOW);
+              digitalWrite(7, LOW);   // MOSI
+              digitalWrite(12, LOW);  // MISO
+              digitalWrite(14, LOW);  // SCK
+            }
+
             if(printDiags){
-              Serial.print("Snooze HH MM SS ");
-              Serial.print(snooze_hour);
-              Serial.print(snooze_minute);
-              Serial.println(snooze_second);
-              Serial.flush(); // make sure empty so doesn't prematurely wake
-            }           
+              Serial.print("Sleep seconds: ");
+              Serial.println(sleepSeconds);
+              Serial.flush();
+            }
             delay(100);
 
-            alarm.setRtcTimer(snooze_hour, snooze_minute, snooze_second); // to be compatible with new snooze library
-            Snooze.sleep(config_teensy32); 
+            set_alarm_at(wakeTime);
+            Snooze.deepSleep(config_teensy32);
 
             /// ... Sleeping ....
-            
+
             // Waking up
-           // if (printDiags==0) usbDisable();
-//             digitalWrite(sdPowSelect[0], HIGH);
-//             SPI.setMOSI(7);
-//             SPI.setSCK(14);
-//             SPI.setMISO(12);
-//      
-//             delay(100);
-//             int cardFailCounter = 0;
-//             while(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
-//              display.print("Card Fail");
-//              display.display();
-//              delay(100);
-//              if(cardFailCounter > 100) resetFunc();
-//            }
+            reset_alarm();
+
+            if(sdPoweredDown){
+              digitalWrite(sdPowSelect[0], HIGH);
+              SPI.setMOSI(7);
+              SPI.setSCK(14);
+              SPI.setMISO(12);
+              delay(100);
+              int cardFailCounter = 0;
+              while(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
+                delay(100);
+                cardFailCounter++;
+                if(cardFailCounter > 100) resetFunc();
+              }
+            }
 
             digitalWrite(hydroPowPin, HIGH); // hydrophone on
             delay(300);  // give time for Serial to reconnect to USB
             AudioInit(isf);
-            
-            //audio_power_up();  // when use audio_power_down() before sleeping, does not always get LRCLK. This did not fix.  
          }
 
         display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  //initialize display
@@ -752,9 +720,8 @@ time_t getTeensy3Time(boolean syncTeensy)
     return t;
   }
   else{
-    return Teensy3Clock.get();  // return Teensy internal clock
+    return t;  // return last known time (internal oscillator not available)
   }
-  
 }
 
 void resetFunc(void){
