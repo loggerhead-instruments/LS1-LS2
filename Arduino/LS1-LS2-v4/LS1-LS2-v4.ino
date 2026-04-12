@@ -713,13 +713,17 @@ void calcGain(){
   }
 }
 
+boolean rtcFail = false;
+
 time_t getTeensy3Time(boolean syncTeensy)
 {
   if(readRTC()){
+    rtcFail = false;
     if(syncTeensy) setTeensyTime(hour(t),minute(t),second(t),day(t),month(t),year(t)); // sync from DS3231 to Teensy time
     return t;
   }
   else{
+    rtcFail = true;
     return t;  // return last known time (internal oscillator not available)
   }
 }

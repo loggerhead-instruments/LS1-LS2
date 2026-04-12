@@ -584,16 +584,7 @@ void manualSettings(){
 }
 
 void setTeensyTime(int hr, int mn, int sc, int dy, int mh, int yr){
-  tmElements_t tm;
-  tm.Year = yr - 1970;
-  tm.Month = mh;
-  tm.Day = dy;
-  tm.Hour = hr;
-  tm.Minute = mn;
-  tm.Second = sc;
-  time_t newtime;
-  newtime = makeTime(tm); 
-  Teensy3Clock.set(newtime); 
+  // No-op: internal oscillator not available, DS3231 is the sole time source
   autoStartTime = getTeensy3Time(0);
 }
   
@@ -839,6 +830,12 @@ void displayVoltage(){
   display.setCursor(100, 0);
   display.print(readVoltage(),1);
   display.print("V");
+  display.setCursor(72, 0);
+  display.print(codeVersion);
+  if(rtcFail){
+    display.setCursor(72, 8);
+    display.print("RTC!");
+  }
 }
 
 void displayChannels(){
