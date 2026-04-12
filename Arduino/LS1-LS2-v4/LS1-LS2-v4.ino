@@ -17,7 +17,7 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "4.10";
+char codeVersion[5] = "4.20";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
@@ -269,6 +269,23 @@ void setup() {
   t = getTeensy3Time(1);  // sync teensy rtc to DS3231
   if (t < 1678737100) setTime2(16, 0, 0, 1, 12, 2024 - 2000U);
   t = getTeensy3Time(1);  // sync teensy rtc to DS3231
+
+  // Check DS3231 oscillator status
+  int rtcStat = rtcStatus();
+  if(rtcStat & 0x80){ // OSF bit set — oscillator stopped
+    cDisplay();
+    display.println("DS3231 OSC");
+    display.println("STOPPED");
+    display.setTextSize(1);
+    display.print("Status: 0x");
+    display.println(rtcStat, HEX);
+    display.print("Time: ");
+    display.print(hour(t)); display.print(":");
+    display.print(minute(t)); display.print(":");
+    display.println(second(t));
+    display.display();
+    delay(5000);
+  }
 
   AudioInit(isf); // load current gain setting
   manualSettings();
