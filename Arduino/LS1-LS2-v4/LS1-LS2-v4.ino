@@ -273,18 +273,36 @@ void setup() {
   // Check DS3231 oscillator status
   int rtcStat = rtcStatus();
   if(rtcStat & 0x80){ // OSF bit set — oscillator stopped
+    // Clear OSF flag and enable oscillator
+    reset_alarm(); // clears status register 0x0F (including OSF)
+
+    // Re-write time to kick oscillator
+    setTime2(hour(t), minute(t), second(t), day(t), month(t), year(t) - 2000U);
+
     cDisplay();
     display.println("DS3231 OSC");
     display.println("STOPPED");
     display.setTextSize(1);
-    display.print("Status: 0x");
-    display.println(rtcStat, HEX);
-    display.print("Time: ");
-    display.print(hour(t)); display.print(":");
-    display.print(minute(t)); display.print(":");
-    display.println(second(t));
+    display.print("Clearing OSF...");
     display.display();
-    delay(5000);
+    delay(3000);
+
+    // Check if clock is now ticking
+    time_t t1 = getTeensy3Time(0);
+    delay(2000);
+    time_t t2 = getTeensy3Time(0);
+    cDisplay();
+    if(t2 > t1){
+      display.println("DS3231 OSC");
+      display.println("RECOVERED");
+    } else {
+      display.println("DS3231 OSC");
+      display.println("FAILED");
+      display.setTextSize(1);
+      display.print("Replace DS3231");
+    }
+    display.display();
+    delay(3000);
   }
 
   AudioInit(isf); // load current gain setting
@@ -489,19 +507,10 @@ void loop() {
 
         if(sleepSeconds >= 10){
             time_t wakeTime = getTeensy3Time(0) + sleepSeconds;
-            boolean sdPoweredDown = (sleepSeconds >= 60);
 
             digitalWrite(hydroPowPin, LOW); //hydrophone off
             audio_power_down();
             I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE); // de-select audio
-
-            if(sdPoweredDown){
-              digitalWrite(sdPowSelect[currentCard], LOW);
-              digitalWrite(chipSelect[currentCard], LOW);
-              digitalWrite(7, LOW);   // MOSI
-              digitalWrite(12, LOW);  // MISO
-              digitalWrite(14, LOW);  // SCK
-            }
 
             if(printDiags){
               Serial.print("Sleep seconds: ");
@@ -517,20 +526,6 @@ void loop() {
 
             // Waking up
             reset_alarm();
-
-            if(sdPoweredDown){
-              digitalWrite(sdPowSelect[0], HIGH);
-              SPI.setMOSI(7);
-              SPI.setSCK(14);
-              SPI.setMISO(12);
-              delay(100);
-              int cardFailCounter = 0;
-              while(!sd.begin(chipSelect[currentCard], SD_SCK_MHZ(50))){
-                delay(100);
-                cardFailCounter++;
-                if(cardFailCounter > 100) resetFunc();
-              }
-            }
 
             digitalWrite(hydroPowPin, HIGH); // hydrophone on
             delay(300);  // give time for Serial to reconnect to USB
