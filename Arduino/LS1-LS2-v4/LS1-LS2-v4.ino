@@ -17,7 +17,7 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "4.20";
+char codeVersion[5] = "4.30";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
@@ -743,6 +743,11 @@ time_t getTeensy3Time(boolean syncTeensy)
 void resetFunc(void){
   EEPROM.write(20, 1); // reset indicator register
   if(mode == 1) file.close();  // close file if open
+  // let the card finish any operation in progress before its power is cut
+  if(sd.card()){
+    uint32_t busyStart = millis();
+    while(sd.card()->isBusy() && (millis() - busyStart < 2000)) delay(10);
+  }
   // MISO, MOSI, SCLK LOW
   digitalWrite(7, LOW);
   digitalWrite(12, LOW);
@@ -767,6 +772,20 @@ void resetFunc(void){
   }
   delay(2000);
   CPU_RESTART
+}
+
+// Switch the card off and on again. The SPI pins are released and CS held low
+// while it is off so nothing powers the card through them.
+void sdPowerCycle(int n){
+  pinMode(7, INPUT_DISABLE);   // MOSI
+  pinMode(12, INPUT_DISABLE);  // MISO
+  pinMode(14, INPUT_DISABLE);  // SCK
+  pinMode(chipSelect[n], OUTPUT);
+  digitalWrite(chipSelect[n], LOW);
+  digitalWrite(sdPowSelect[n], LOW);
+  delay(2000);
+  digitalWrite(sdPowSelect[n], HIGH);
+  delay(1000);  // sd.begin() reconnects the SPI pins
 }
 
 void read_myID() {

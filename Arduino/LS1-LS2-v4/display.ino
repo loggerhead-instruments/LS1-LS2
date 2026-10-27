@@ -132,8 +132,28 @@ void manualSettings(){
       display.display();
       delay(100);
 
-      if(sd.begin(chipSelect[n])){
-        int32_t volFree = sd.vol()->freeClusterCount();
+      // Start the card and count its free space. A failure right after a reset
+      // is often temporary, so retry with a power cycle before giving up.
+      int32_t volFree = 0;
+      boolean cardBegun = 0;
+      for(int attempt = 0; attempt < 5; attempt++){
+        if(attempt > 0){
+          Serial.print("Card retry ");
+          Serial.println(attempt);
+          sdPowerCycle(n);
+        }
+        cardBegun = sd.begin(chipSelect[n]);
+        if(cardBegun){
+          volFree = sd.vol()->freeClusterCount();
+          if(volFree == 0){  // 0 is also returned if any read fails while counting
+            delay(3000);
+            volFree = sd.vol()->freeClusterCount();
+          }
+          if(volFree > 0) break;
+        }
+      }
+
+      if(cardBegun){
         Serial.print("volFree:");
         Serial.println(volFree);
 
@@ -162,7 +182,8 @@ void manualSettings(){
         Serial.println("Unable to access the SD card");
         display.print("Card Fail");
         display.display();
-        while(1);
+        delay(5000);
+        resetFunc();  // power-cycle the card and restart rather than halting
     }
     // digitalWrite(sdPowSelect[n], LOW);
   }
