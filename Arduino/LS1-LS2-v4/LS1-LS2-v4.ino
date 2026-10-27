@@ -256,8 +256,12 @@ void setup() {
   delay(140);
   cDisplay();
   display.println("Loggerhead");
+  display.setTextSize(1);
+  display.print("Version ");
+  display.println(codeVersion);
   display.display();
-  
+  delay(1000); // leave splash up long enough to read the version
+
   // Audio connections require memory, and the record queue
   // uses this memory to buffer incoming audio.
   // initialize now to estimate DC offset during setup
