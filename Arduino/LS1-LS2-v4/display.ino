@@ -252,6 +252,7 @@ void manualSettings(){
   // Main Menu Loop
    while(startRec==0){
     static int newYear, newMonth, newDay, newHour, newMinute, newSecond, oldYear, oldMonth, oldDay, oldHour, oldMinute, oldSecond;
+    checkSerialTime();  // time set from USB (tools/set-time.html)
     t = getTeensy3Time(0);
     if (t - autoStartTime > 600) startRec = 1; //autostart if no activity for 10 minutes
     

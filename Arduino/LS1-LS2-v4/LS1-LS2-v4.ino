@@ -3,7 +3,7 @@
 // THIS VERSION ONLY WORKS WITH 1 CARD with Version 4 LS1/L2 Boards
 //
 // Loggerhead Instruments
-// 2024 For use with LS1-LS2 Version 4 ONLY
+// 2026 For use with LS1-LS2 Version 4 ONLY
 // David Mann 
 
 // 
@@ -167,7 +167,7 @@ boolean rtcFail = false;  // DS3231 has failed and a backup clock is in use
 float lpoHz = 1000.0;     // measured LPO frequency
 time_t softTime = 0;      // millis()-based clock used with the LPTMR
 uint32_t softMillis = 0;
-#define DEFAULT_TIME 1733068800  // 2024-12-01 16:00:00, used when no clock has a valid time
+#define DEFAULT_TIME 1793548800  // 2026-11-01 16:00:00, used when no clock has a valid time
 
 byte voltCutoff = 33;  // stop recording below this battery voltage, in tenths of a volt; 0 = off
 int lowVoltCount = 0;
