@@ -476,6 +476,11 @@ function findIssues() {
         'A previous deployment stopped because the battery fell below the cutoff.',
         { label: 'Clear', cmd: 'C\n' }));
     }
+    if (status.card_full_stop === '1') {
+      list.push(issue('warn', 'Recording stopped with the card full',
+        'A previous deployment recorded all the files that fit on the card. Offload the data and format the card before reuse.',
+        { label: 'Clear', cmd: 'C\n' }));
+    }
   }
   return list;
 }

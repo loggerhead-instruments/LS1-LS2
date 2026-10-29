@@ -3,7 +3,7 @@
 //   T<seconds>        set the clock (seconds since 1970 UTC), then report it
 //   G                 report device, clock, settings and status
 //   S <name>=<value>  change one setting and save it; replies OK <name> or ERR <name>
-//   C                 clear the SD restart count and low-battery flag
+//   C                 clear the SD restart count and the low-battery and card-full flags
 // Replies, one line each:
 //   DEVICE <model> <firmware version>
 //   TIME <seconds since 1970> <clock source> <firmware version>
@@ -50,6 +50,7 @@ void checkSerialCommands(){
       case 'C':
         EEPROM.write(EE_SD_RESTARTS, 0);
         EEPROM.write(EE_LOW_BATT_STOP, 0);
+        EEPROM.write(EE_CARD_FULL_STOP, 0);
         Serial.println("OK clear");
         break;
     }
@@ -75,11 +76,11 @@ void reportSettings(){
 void reportStatus(){
   calcDeployment();
   pinMode(vSense, INPUT);
-  Serial.printf("STATUS volt=%.2f free_mb=%lu total_mb=%lu file_mb=%.1f files=%lu power_days=%.1f mem_days=%.1f gain_db=%.1f internal_rtc=%d osc_stopped=%d sd_restarts=%d low_batt_stop=%d\n",
+  Serial.printf("STATUS volt=%.2f free_mb=%lu total_mb=%lu file_mb=%.1f files=%lu power_days=%.1f mem_days=%.1f gain_db=%.1f internal_rtc=%d osc_stopped=%d sd_restarts=%d low_batt_stop=%d card_full_stop=%d\n",
     readVoltage(), freeMB[0], cardTotalMB, fileMB, filesPerCard[0],
     powerSeconds / 86400.0, totalSecondsMemory / 86400.0, gainDb,
     (int) internalRtcOK, (int) dsOscStopped,
-    (int) EEPROM.read(EE_SD_RESTARTS), (int) EEPROM.read(EE_LOW_BATT_STOP));
+    (int) EEPROM.read(EE_SD_RESTARTS), (int) EEPROM.read(EE_LOW_BATT_STOP), (int) EEPROM.read(EE_CARD_FULL_STOP));
 }
 
 // Ranges match the menu

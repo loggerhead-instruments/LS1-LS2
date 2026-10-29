@@ -176,6 +176,9 @@ int lowVoltCount = 0;
 // EEPROM bytes read by the setup page (tools/logger-setup.html); cleared from the page
 #define EE_SD_RESTARTS 25    // count of resetFunc() restarts
 #define EE_LOW_BATT_STOP 26  // 1 if recording stopped on low battery
+#define EE_CARD_FULL_STOP 27 // 1 if recording stopped with the card full
+#define EE_DEPLOYED 28       // 1 while a deployment is running; cleared at power-up
+boolean resumeDeployment = false;  // restarted by resetFunc() during a deployment
 
 // SD_FAT_TYPE = 0 for SdFat/File as defined in SdFatConfig.h,
 // 1 for FAT16/FAT32, 2 for exFAT, 3 for FAT16/FAT32 and exFAT.
@@ -250,6 +253,13 @@ struct TIME_HEAD
 void setup() {
   read_myID();
 
+  // A software reset (resetFunc) during a deployment goes straight back to recording,
+  // without the menu wait or delay days. Power-up, low voltage or any other reset
+  // starts fresh with the menu.
+  boolean softwareReset = (RCM_SRS1 & 0x04) && !(RCM_SRS0 & 0x82);  // SW set; POR and LVD clear
+  resumeDeployment = softwareReset & (EEPROM.read(EE_DEPLOYED) == 1);
+  if(!resumeDeployment & (EEPROM.read(EE_DEPLOYED) != 0)) EEPROM.write(EE_DEPLOYED, 0);
+
   chipSelect[0] = CS1;
   sdPowSelect[0] = SDPOW1;
   
@@ -299,6 +309,7 @@ void setup() {
 
   AudioInit(isf); // load current gain setting
   manualSettings();
+  EEPROM.write(EE_DEPLOYED, 1);  // deployment starts; no write if already set
   audio_srate = lhi_fsamps[isf];
   AudioInit(isf); // set with new settings
 
@@ -311,12 +322,12 @@ void setup() {
   startTime = t;
   startTime -= startTime % roundSeconds;  
   startTime += roundSeconds; //move forward
-  startTime += delayDays * 86400;
+  if(!resumeDeployment) startTime += delayDays * 86400;  // the delay was already served before a restart
   stopTime = startTime + rec_dur;  // this will be set on start of recording
 
 
   // delay start
-  if(delayDays > 0){
+  if((delayDays > 0) & !resumeDeployment){
     // power down SD, SGTL
     digitalWrite(hydroPowPin, LOW);
     digitalWrite(SDPOW1, LOW);
@@ -472,6 +483,7 @@ void loop() {
       display.setTextSize(1);
       display.println("Safe to turn off");
       display.display();
+      EEPROM.write(EE_DEPLOYED, 0);  // deployment stopped by hand
       while(1);
     }
     
@@ -754,7 +766,6 @@ time_t getTeensy3Time(boolean syncTeensy)
 }
 
 void resetFunc(void){
-  EEPROM.write(20, 1); // reset indicator register
   byte sdRestarts = EEPROM.read(EE_SD_RESTARTS);
   if(sdRestarts < 254) EEPROM.write(EE_SD_RESTARTS, sdRestarts + 1);
   if(mode == 1) file.close();  // close file if open
@@ -823,11 +834,19 @@ float readVoltage(){
 }
 
 void checkSD(){
-  if (filesPerCard[currentCard] > 0) filesPerCard[currentCard] -= 1;
-  else{
-    // card full, stop recordings
-    while(1);
+  if (filesPerCard[currentCard] == 0){
+    // The power-up estimate says the card is full. Count the free space before stopping.
+    int32_t volFree = sd.vol()->freeClusterCount();
+    if(volFree <= 0) resetFunc();  // count failed (a full card still has the 200 MB margin): restart and retry the card
+    float freeSpace = 0.000512 * volFree * sd.vol()->blocksPerCluster();
+    if (freeSpace < 200) freeMB[currentCard] = 0;
+    else freeMB[currentCard] = freeSpace - 200; // same 200 MB margin as at power-up
+    if (freeMB[currentCard] > fileMB) filesPerCard[currentCard] = (uint32_t) floor(freeMB[currentCard] / fileMB);
+    Serial.print("Files left after recount: ");
+    Serial.println(filesPerCard[currentCard]);
+    if (filesPerCard[currentCard] == 0) stopForGood(EE_CARD_FULL_STOP, "Card Full", "");  // all the files that fit are recorded
   }
+  filesPerCard[currentCard] -= 1;
 
   if(printDiags){
     Serial.print("Files per card: ");
@@ -843,14 +862,19 @@ void checkVoltage(){
   float voltage = readVoltage();
   if(voltage < voltCutoff / 10.0) lowVoltCount++;
   else lowVoltCount = 0;
-  if(lowVoltCount >= 3) lowVoltageStop(voltage);
+  if(lowVoltCount >= 3){
+    char detail[12];
+    sprintf(detail, "%.1fV", voltage);
+    stopForGood(EE_LOW_BATT_STOP, "Low Batt", detail);
+  }
 }
 
-// Battery below cutoff: power everything down and sleep until the power is cycled.
-// The last file is already closed.
-void lowVoltageStop(float voltage){
-  Serial.print("Low battery stop ");
-  Serial.println(voltage);
+// Recording is over (card full or battery low): power everything down and sleep until
+// the power is cycled. eeFlag records why, for the setup page. The last file is already closed.
+void stopForGood(int eeFlag, const char *title, const char *detail){
+  Serial.print(title);
+  Serial.print(" stop ");
+  Serial.println(detail);
   queue1.end();
   if(NCHAN==2) queue2.end();
   digitalWrite(hydroPowPin, LOW);
@@ -870,16 +894,16 @@ void lowVoltageStop(float voltage){
 
   display.ssd1306_command(SSD1306_DISPLAYON);
   cDisplay();
-  display.println("Low Batt");
+  display.println(title);
   display.println("Stopped");
   display.setTextSize(1);
-  display.print(voltage, 1);
-  display.print("V");
+  display.print(detail);
   display.display();
   delay(5000);
   display.ssd1306_command(SSD1306_DISPLAYOFF);
 
-  EEPROM.write(EE_LOW_BATT_STOP, 1);
+  EEPROM.write(eeFlag, 1);
+  EEPROM.write(EE_DEPLOYED, 0);  // deployment is over
   disable_alarm();  // so the DS3231 does not hold INT low
   digitalWrite(SGTL_EN, LOW);
   digitalWrite(LEDGREEN, LOW);

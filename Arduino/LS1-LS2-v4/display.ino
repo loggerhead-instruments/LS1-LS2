@@ -159,6 +159,17 @@ void manualSettings(){
         }
       }
 
+      // A free count of 0 (exFAT) or -1 (FAT32) means a read failed: a card this logger
+      // filled still has the 200 MB margin free. Restart and try again, as for a card that
+      // does not start, rather than stopping as if the card were full.
+      if(cardBegun & (volFree <= 0)){
+        Serial.println("Unable to count free space");
+        display.print("Card Read Fail");
+        display.display();
+        delay(5000);
+        resetFunc();
+      }
+
       if(cardBegun){
         Serial.print("volFree:");
         Serial.println(volFree);
@@ -254,6 +265,18 @@ void manualSettings(){
   }
   if (EEPROM.read(EE_SD_RESTARTS) == 255) EEPROM.write(EE_SD_RESTARTS, 0);     // never written
   if (EEPROM.read(EE_LOW_BATT_STOP) == 255) EEPROM.write(EE_LOW_BATT_STOP, 0);
+  if (EEPROM.read(EE_CARD_FULL_STOP) == 255) EEPROM.write(EE_CARD_FULL_STOP, 0);
+
+  // After a restart during a deployment, skip the menu and go back to recording
+  if(resumeDeployment){
+    cDisplay();
+    display.println("Resuming");
+    display.setTextSize(1);
+    display.print("after restart");
+    display.display();
+    delay(2000);
+    startRec = 1;
+  }
 
   // Main Menu Loop
    while(startRec==0){
@@ -639,6 +662,7 @@ void manualSettings(){
     display.display();
     delay(10);
   }
+  calcDeployment();  // files that fit, also when the menu was skipped
 }
 
 // Keep the internal RTC on DS3231 time so it can take over if the DS3231 fails
