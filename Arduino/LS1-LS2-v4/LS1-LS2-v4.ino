@@ -17,8 +17,9 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "4.40";
+char codeVersion[5] = "4.41";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
+static boolean sleepDiags = 1;  // 1: print each sleep and wake on USB serial (bench diagnostics); 0 for deployment
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
 int wakeahead = 4;  //wake from snooze to give hydrophone to power up
@@ -146,11 +147,11 @@ char filename[100];
 char dirname[20];
 int folderMonth;
 
-SnoozeDigital digital;   // DS3231 INT on pin 16
+// The internal RTC alarm wakes the logger. The DS3231 is the time reference only, so a
+// faulty DS3231 cannot stop the logger waking.
 SnoozeAlarm rtcAlarm;    // Kinetis internal RTC alarm
 SnoozeTimer lptmr;       // LPTMR on the 1 kHz LPO; backup wake at least once a minute
 SnoozeAudio snooze_audio;
-SnoozeBlock config_ds3231(snooze_audio, digital, lptmr);
 SnoozeBlock config_internal(snooze_audio, rtcAlarm, lptmr);
 SnoozeBlock config_lptmr(snooze_audio, lptmr);
 SnoozeBlock config_off(snooze_audio);  // no wake source: sleeps until power is cycled
@@ -271,7 +272,7 @@ void setup() {
   digitalWrite(LEDGREEN, HIGH);
   
   Wire.begin();
-  digital.pinMode(DS3231_INT_PIN, INPUT_PULLUP, FALLING); // DS3231 INT wake from deep sleep
+  pinMode(DS3231_INT_PIN, INPUT_PULLUP); // DS3231 INT, not used to wake; read for diagnostics
   pinMode(vSense, INPUT);
   analogReference(INTERNAL);
   
@@ -725,6 +726,7 @@ void calcGain(){
 int dsReadFails = 0;
 time_t lastDsTime = 0, lastRtcTime = 0;
 uint32_t lastDsChange = 0, lastRtcChange = 0;
+time_t lastDsChangeRtc = 0;  // internal RTC time when the DS3231 reading last changed
 
 // True while a clock keeps counting; false once its reading has not changed for 5 s
 boolean clockCounting(time_t now, time_t *last, uint32_t *lastChange){
@@ -737,14 +739,27 @@ boolean clockCounting(time_t now, time_t *last, uint32_t *lastChange){
 
 // Returns the time from the best working clock and switches to a backup clock
 // when the DS3231 stops answering (3 failed reads in a row) or stops counting.
+// The DS3231 counts as stuck when its time has not changed for 5 s by millis() (awake)
+// or by the internal RTC, which also counts during sleep.
 time_t getTeensy3Time(boolean syncTeensy)
 {
   if(clockSource == CLOCK_DS3231){
     if(readRTC()){
       dsReadFails = 0;
-      if(clockCounting(t, &lastDsTime, &lastDsChange)){
+      boolean changed = (t != lastDsTime);
+      if(changed){
+        lastDsTime = t;
+        lastDsChange = millis();
+        lastDsChangeRtc = Teensy3Clock.get();
+      }
+      boolean stuck = !changed && ((millis() - lastDsChange >= 5000) ||
+                                   (internalRtcOK && (long) (Teensy3Clock.get() - lastDsChangeRtc) >= 5));
+      if(!stuck){
         setSoftTime(t);
-        if(syncTeensy) setTeensyTime(hour(t),minute(t),second(t),day(t),month(t),year(t)); // sync from DS3231 to Teensy time
+        if(syncTeensy){
+          setTeensyTime(hour(t),minute(t),second(t),day(t),month(t),year(t)); // sync from DS3231 to Teensy time
+          if(changed) lastDsChangeRtc = Teensy3Clock.get();  // measure from the synced time
+        }
         return t;
       }
       useBackupClock();  // DS3231 answers but its time is stuck

@@ -57,29 +57,6 @@ void set_alarm(int thour, int tminute)
   Wire.endTransmission();
 }
 
-void set_alarm_at(time_t wakeTime)
-{
-  int tsecond = second(wakeTime);
-  int tminute = minute(wakeTime);
-  int thour = hour(wakeTime);
-
-  reset_alarm(); // clear any pending alarm
-
-  Wire.beginTransmission(RTCAddress);
-  Wire.write(0x07); // Alarm 1 registers
-  Wire.write(((tsecond/10)<<4) | (tsecond%10));       // seconds, A1M1=0
-  Wire.write(((tminute/10)<<4) | (tminute%10));       // minutes, A1M2=0
-  Wire.write((((thour/10)&0x03)<<4) | (thour%10));    // hours,   A1M3=0
-  Wire.write(0x80);                                     // day,     A1M4=1 (match h:m:s)
-  Wire.endTransmission();
-
-  Wire.beginTransmission(RTCAddress);
-  Wire.write(0x0E); // Control register
-  Wire.write(0x05); // INTCN=1, A1IE=1 (enable Alarm 1 interrupt)
-  Wire.write(0x00); // clear status flags
-  Wire.endTransmission();
-}
-
 void reset_alarm()
 {
   Wire.beginTransmission(RTCAddress);
@@ -101,19 +78,17 @@ boolean readRTC()
   // Serial.println("Read DS3231: ");
   int i = 0;
   byte buff[7];
-  Wire.beginTransmission(RTCAddress); 
+  Wire.beginTransmission(RTCAddress);
   Wire.write(0x00);        //sends address to read from starting with seconds
-  Wire.endTransmission(0); //end transmission
-  
-  Wire.requestFrom(RTCAddress, 7, 0);    // request 7 bytes from clock (seconds through Year)
-  int bytesavail=Wire.available();
+  Wire.endTransmission(0); // no stop: repeated start for the read
 
-  while(Wire.available())   // ((Wire.available())&&(i<6))
-  { 
+  Wire.requestFrom(RTCAddress, 7, 1);    // request 7 bytes from clock (seconds through Year), then stop
+
+  while(Wire.available() && i < 7)
+  {
     buff[i] = Wire.read();  // receive one byte
     i++;
   }
-   Wire.endTransmission();
 
   if (i==7)  // All bytes received?
   {
@@ -141,18 +116,31 @@ boolean readRTC()
 }
 
 int rtcStatus(){
-  byte val[2];
-  
-  Wire.beginTransmission(RTCAddress); 
-  Wire.write(0x0F);        //sends address to read from starting with seconds
-  Wire.endTransmission(); //end transmission
+  byte reg[16];
+  if(readDSRegs(reg, 16) < 16) return 0xFF;  // no reply: treat as stopped
+  return reg[15];  // status register 0x0F
+}
 
-  Wire.requestFrom(RTCAddress, 1);
-  val[0] = Wire.read();
-  //val[1] = Wire.read();
-  Wire.endTransmission();
+// Read DS3231 registers from 0x00. Returns the number of bytes read.
+int readDSRegs(byte *reg, int count){
+  Wire.beginTransmission(RTCAddress);
+  Wire.write(0x00);
+  if(Wire.endTransmission(0) != 0) return 0;  // no stop: repeated start for the read
+  int n = Wire.requestFrom(RTCAddress, count, 1);
+  for(int i = 0; i < n; i++) reg[i] = Wire.read();
+  return n;
+}
 
-  return val[0];
+// Bench diagnostics (sleepDiags): the wake source and the state of both clocks on USB serial
+void printWake(int who){
+  byte reg[16];
+  Serial.printf("wake %d (16 DS INT, 35 RTC alarm, 36 LPTMR) clk %d int %lu INT pin %d DS", who, clockSource,
+    (uint32_t) Teensy3Clock.get(), digitalRead(DS3231_INT_PIN));
+  if(readDSRegs(reg, 16) == 16){
+    Serial.printf(" %02X:%02X:%02X %02X/%02X/%02X ctrl %02X stat %02X", reg[2], reg[1], reg[0], reg[4], reg[5], reg[6], reg[14], reg[15]);
+  }
+  else Serial.print(" no reply");
+  Serial.println();
 }
 
 // True if the DS3231 answers with a valid time and is counting
@@ -278,6 +266,7 @@ void clockInit(){
 
   if(dsOK){
     clockSource = CLOCK_DS3231;
+    disable_alarm();  // the internal RTC alarm wakes the logger; keep INT idle
     t = getTeensy3Time(1);  // sync teensy rtc to DS3231
     return;
   }
@@ -299,43 +288,39 @@ void clockInit(){
   delay(5000);
 }
 
-// Sleep until wakeTime on whichever clock is working. The LPTMR also wakes the
-// logger at least once a minute, so a clock that stops during sleep is caught
-// by getTeensy3Time() and the next sleep uses the backup clock.
+// Sleep until wakeTime. The internal RTC alarm wakes the logger; the DS3231 is only the time
+// reference, read and synced to the internal RTC at each wake, so a faulty DS3231 cannot stop
+// the logger waking. The LPTMR is a backup 2 s after the alarm. If the internal RTC is not
+// running, the LPTMR is the alarm, in steps of up to a minute.
 // sgtlOff: switch the SGTL5000 off while asleep (I2C needs it on).
 void sleepUntil(time_t wakeTime, boolean sgtlOff){
-  if(clockSource == CLOCK_LPTMR) calibrateLPO();
+  if(!internalRtcOK) calibrateLPO();
   while(1){
-    long secs = wakeTime - getTeensy3Time(1);
+    long secs = wakeTime - getTeensy3Time(1);  // also syncs the internal RTC to the DS3231
     if(secs <= 0) break;
 
-    // with a clock alarm the LPTMR is a backup 2 s late; on its own it is the alarm
-    long lpSecs = (clockSource == CLOCK_LPTMR) ? secs : secs + 2;
+    long lpSecs = internalRtcOK ? secs + 2 : secs;
     if(lpSecs > 60) lpSecs = 60;
     uint32_t ticks = lpSecs * lpoHz;
     if(ticks > 65000) ticks = 65000;
     lptmr.setTimer(ticks);
 
-    int who;
-    if(clockSource == CLOCK_DS3231){
-      set_alarm_at(wakeTime);
-      if(sgtlOff) digitalWrite(SGTL_EN, LOW);
-      who = Snooze.deepSleep(config_ds3231);
+    if(sleepDiags){
+      Serial.printf("sleep %ld s clk %d int %lu\n", secs, clockSource, (uint32_t) Teensy3Clock.get());
+      Serial.flush();
     }
-    else if(clockSource == CLOCK_INTERNAL){
+    if(sgtlOff) digitalWrite(SGTL_EN, LOW);
+    int who;
+    if(internalRtcOK){
       rtcAlarm.setRtcTimer(secs / 3600, (secs % 3600) / 60, secs % 60);
-      if(sgtlOff) digitalWrite(SGTL_EN, LOW);
       who = Snooze.deepSleep(config_internal);
     }
-    else{
-      if(sgtlOff) digitalWrite(SGTL_EN, LOW);
-      who = Snooze.deepSleep(config_lptmr);
-    }
+    else who = Snooze.deepSleep(config_lptmr);
     /// ... sleeping ...
     if(sgtlOff) digitalWrite(SGTL_EN, HIGH); // power on so I2C works
 
     // Snooze adds the LPTMR ticks to millis() as if they were ms; correct to real time
     if(who == LPTMR_WAKE) softMillis += ticks - (uint32_t) (ticks * 1000.0 / lpoHz);
-    if(clockSource == CLOCK_DS3231) reset_alarm();
+    if(sleepDiags) printWake(who);
   }
 }

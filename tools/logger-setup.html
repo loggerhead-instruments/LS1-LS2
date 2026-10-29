@@ -444,7 +444,7 @@ function findIssues() {
     }
     if (status.osc_stopped === '1') {
       list.push(issue('warn', 'DS3231 lost power before this start-up',
-        'Its time may be wrong. Click Set logger to UTC now.'));
+        'Its time may be wrong. Click Set logger to UTC now. If this shows after every power-up, check that the coin cell is fitted and reads about 3 V.'));
     }
   }
   if (loggerOffset !== null && Math.abs(loggerOffset) > 2 && !(status && status.osc_stopped === '1')) {

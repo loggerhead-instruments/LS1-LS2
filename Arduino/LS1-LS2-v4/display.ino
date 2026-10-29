@@ -1,5 +1,5 @@
 float mAmpRec = 50;  
-float mAmpSleep = 3.2; 
+float mAmpSleep = 2.0; // measured 1.38 mA at 4 V with deep sleep (v4.40); rounded up to be conservative
 byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
 
