@@ -17,7 +17,7 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "4.30";
+char codeVersion[5] = "4.40";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
@@ -145,9 +145,32 @@ char filename[100];
 char dirname[20];
 int folderMonth;
 
-SnoozeDigital digital;
+SnoozeDigital digital;   // DS3231 INT on pin 16
+SnoozeAlarm rtcAlarm;    // Kinetis internal RTC alarm
+SnoozeTimer lptmr;       // LPTMR on the 1 kHz LPO; backup wake at least once a minute
 SnoozeAudio snooze_audio;
-SnoozeBlock config_teensy32(snooze_audio, digital);
+SnoozeBlock config_ds3231(snooze_audio, digital, lptmr);
+SnoozeBlock config_internal(snooze_audio, rtcAlarm, lptmr);
+SnoozeBlock config_lptmr(snooze_audio, lptmr);
+SnoozeBlock config_off(snooze_audio);  // no wake source: sleeps until power is cycled
+#define LPTMR_WAKE 36  // Snooze wake source for the LPTMR
+
+// Clock sources, best first. The DS3231 is used while it works. If it stops answering
+// or stops counting, time comes from the Kinetis internal RTC, and if that is not
+// running either, from millis() plus a count of LPTMR sleep periods.
+#define CLOCK_DS3231 0
+#define CLOCK_INTERNAL 1
+#define CLOCK_LPTMR 2
+int clockSource = CLOCK_DS3231;
+boolean internalRtcOK = false;
+boolean rtcFail = false;  // DS3231 has failed and a backup clock is in use
+float lpoHz = 1000.0;     // measured LPO frequency
+time_t softTime = 0;      // millis()-based clock used with the LPTMR
+uint32_t softMillis = 0;
+#define DEFAULT_TIME 1733068800  // 2024-12-01 16:00:00, used when no clock has a valid time
+
+byte voltCutoff = 33;  // stop recording below this battery voltage, in tenths of a volt; 0 = off
+int lowVoltCount = 0;
 
 // SD_FAT_TYPE = 0 for SdFat/File as defined in SdFatConfig.h,
 // 1 for FAT16/FAT32, 2 for exFAT, 3 for FAT16/FAT32 and exFAT.
@@ -228,9 +251,6 @@ void setup() {
   Serial.begin(baud);
   delay(500);
 
-  // Internal 32.768 kHz oscillator disabled — using DS3231 external RTC
-  RTC_CR = 0;
-
   pinMode(LEDGREEN, OUTPUT);
   digitalWrite(LEDGREEN, HIGH);
   
@@ -270,44 +290,7 @@ void setup() {
   audio_srate = lhi_fsamps[isf];
 //WMXZ  audioIntervalSec = 256.0 / audio_srate; //buffer interval in seconds
 
-  t = getTeensy3Time(1);  // sync teensy rtc to DS3231
-  if (t < 1678737100) setTime2(16, 0, 0, 1, 12, 2024 - 2000U);
-  t = getTeensy3Time(1);  // sync teensy rtc to DS3231
-
-  // Check DS3231 oscillator status
-  int rtcStat = rtcStatus();
-  if(rtcStat & 0x80){ // OSF bit set — oscillator stopped
-    // Clear OSF flag and enable oscillator
-    reset_alarm(); // clears status register 0x0F (including OSF)
-
-    // Re-write time to kick oscillator
-    setTime2(hour(t), minute(t), second(t), day(t), month(t), year(t) - 2000U);
-
-    cDisplay();
-    display.println("DS3231 OSC");
-    display.println("STOPPED");
-    display.setTextSize(1);
-    display.print("Clearing OSF...");
-    display.display();
-    delay(3000);
-
-    // Check if clock is now ticking
-    time_t t1 = getTeensy3Time(0);
-    delay(2000);
-    time_t t2 = getTeensy3Time(0);
-    cDisplay();
-    if(t2 > t1){
-      display.println("DS3231 OSC");
-      display.println("RECOVERED");
-    } else {
-      display.println("DS3231 OSC");
-      display.println("FAILED");
-      display.setTextSize(1);
-      display.print("Replace DS3231");
-    }
-    display.display();
-    delay(3000);
-  }
+  clockInit();  // check the DS3231 and fall back to the internal RTC if it has failed
 
   AudioInit(isf); // load current gain setting
   manualSettings();
@@ -353,15 +336,10 @@ void setup() {
       display.ssd1306_command(SSD1306_DISPLAYOFF);
       digitalWrite(LEDGREEN, HIGH);
       t = getTeensy3Time(0);
-      set_alarm_at(t + 20); // DS3231 alarm in 20 seconds
       delay(10);
       digitalWrite(LEDGREEN, LOW);
-      Snooze.deepSleep(config_teensy32);
-      /// .... sleeping ...
-      digitalWrite(SGTL_EN, HIGH); // power on so I2C works
-      reset_alarm();
+      sleepUntil(t + 20, 1); // sleep 20 seconds with SGTL5000 off
       t = getTeensy3Time(1);
-      digitalWrite(SGTL_EN, LOW);
       time_to_first_rec = startTime - t;
     }
     digitalWrite(hydroPowPin, HIGH);
@@ -496,6 +474,7 @@ void loop() {
       if(((rec_int == 0) & (recMode==MODE_NORMAL)) | ((rec_int == 0) & (recMode==MODE_DIEL) & (getTeensy3Time(0)<stopTime))){
         file.close();
         checkSD();
+        checkVoltage();
         FileInit();  // make a new file
         buf_count = 0;
         if(printDiags) {
@@ -506,6 +485,7 @@ void loop() {
       else{
         stopRecording();
         checkSD();
+        checkVoltage();
         long sleepSeconds = startTime - getTeensy3Time(0) - wakeahead;
         if (sleepSeconds < 0) sleepSeconds = 0;
 
@@ -523,14 +503,9 @@ void loop() {
             }
             delay(100);
 
-            set_alarm_at(wakeTime);
-            Snooze.deepSleep(config_teensy32);
-
-            /// ... Sleeping ....
+            sleepUntil(wakeTime, 0);
 
             // Waking up
-            reset_alarm();
-
             digitalWrite(hydroPowPin, HIGH); // hydrophone on
             delay(300);  // give time for Serial to reconnect to USB
             AudioInit(isf);
@@ -729,19 +704,48 @@ void calcGain(){
   }
 }
 
-boolean rtcFail = false;
+int dsReadFails = 0;
+time_t lastDsTime = 0, lastRtcTime = 0;
+uint32_t lastDsChange = 0, lastRtcChange = 0;
 
+// True while a clock keeps counting; false once its reading has not changed for 5 s
+boolean clockCounting(time_t now, time_t *last, uint32_t *lastChange){
+  if(now != *last){
+    *last = now;
+    *lastChange = millis();
+  }
+  return (millis() - *lastChange < 5000);
+}
+
+// Returns the time from the best working clock and switches to a backup clock
+// when the DS3231 stops answering (3 failed reads in a row) or stops counting.
 time_t getTeensy3Time(boolean syncTeensy)
 {
-  if(readRTC()){
-    rtcFail = false;
-    if(syncTeensy) setTeensyTime(hour(t),minute(t),second(t),day(t),month(t),year(t)); // sync from DS3231 to Teensy time
-    return t;
+  if(clockSource == CLOCK_DS3231){
+    if(readRTC()){
+      dsReadFails = 0;
+      if(clockCounting(t, &lastDsTime, &lastDsChange)){
+        setSoftTime(t);
+        if(syncTeensy) setTeensyTime(hour(t),minute(t),second(t),day(t),month(t),year(t)); // sync from DS3231 to Teensy time
+        return t;
+      }
+      useBackupClock();  // DS3231 answers but its time is stuck
+    }
+    else if(++dsReadFails >= 3) useBackupClock();
   }
-  else{
-    rtcFail = true;
-    return t;  // return last known time (internal oscillator not available)
+
+  if(internalRtcOK){
+    t = Teensy3Clock.get();
+    if(clockCounting(t, &lastRtcTime, &lastRtcChange)){
+      setSoftTime(t);
+      return t;
+    }
+    internalRtcOK = false;  // internal RTC stopped too
+    if(clockSource == CLOCK_INTERNAL) clockSource = CLOCK_LPTMR;
   }
+
+  t = softNow();
+  return t;
 }
 
 void resetFunc(void){
@@ -822,6 +826,56 @@ void checkSD(){
     Serial.print("Files per card: ");
     Serial.println(filesPerCard[currentCard]);
   }
+}
+
+// Called between files. Stops for good once the battery has read below the cutoff
+// at 3 file changes in a row, so a single low reading does not end a deployment.
+void checkVoltage(){
+  if(voltCutoff == 0) return;  // cutoff turned off
+  pinMode(vSense, INPUT);
+  float voltage = readVoltage();
+  if(voltage < voltCutoff / 10.0) lowVoltCount++;
+  else lowVoltCount = 0;
+  if(lowVoltCount >= 3) lowVoltageStop(voltage);
+}
+
+// Battery below cutoff: power everything down and sleep until the power is cycled.
+// The last file is already closed.
+void lowVoltageStop(float voltage){
+  Serial.print("Low battery stop ");
+  Serial.println(voltage);
+  queue1.end();
+  if(NCHAN==2) queue2.end();
+  digitalWrite(hydroPowPin, LOW);
+  audio_power_down();
+  I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE); // de-select audio
+
+  // let the card finish any operation in progress, then switch it off
+  if(sd.card()){
+    uint32_t busyStart = millis();
+    while(sd.card()->isBusy() && (millis() - busyStart < 2000)) delay(10);
+  }
+  pinMode(7, INPUT_DISABLE);   // MOSI
+  pinMode(12, INPUT_DISABLE);  // MISO
+  pinMode(14, INPUT_DISABLE);  // SCK
+  digitalWrite(chipSelect[0], LOW);
+  digitalWrite(sdPowSelect[0], LOW);
+
+  display.ssd1306_command(SSD1306_DISPLAYON);
+  cDisplay();
+  display.println("Low Batt");
+  display.println("Stopped");
+  display.setTextSize(1);
+  display.print(voltage, 1);
+  display.print("V");
+  display.display();
+  delay(5000);
+  display.ssd1306_command(SSD1306_DISPLAYOFF);
+
+  disable_alarm();  // so the DS3231 does not hold INT low
+  digitalWrite(SGTL_EN, LOW);
+  digitalWrite(LEDGREEN, LOW);
+  while(1) Snooze.deepSleep(config_off);
 }
 
 void setDielTime(){

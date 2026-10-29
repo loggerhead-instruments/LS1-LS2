@@ -42,7 +42,7 @@ float mAmpStereo[9] = { 36, 38, 43, 47, 48, 62, 90, 100, 107};
 csd_t m_csd;
 
 int curMenuItem = 0;
-volatile int maxMenuItem = 10;
+volatile int maxMenuItem = 11;
 char *menuItem[] = {"Start",
                      "Record",
                      "Sleep",
@@ -53,6 +53,7 @@ char *menuItem[] = {"Start",
                      "Channel",
                      "Delay",
                      "Mode",
+                     "Cutoff",
                      "Diel"
                      };
 
@@ -66,6 +67,7 @@ char *helpText[] = {"ENTER:Start RecordingUP/DN:scroll menu",
                     "ENTER:Set #Channels\nUP/DN:scroll menu",
                     "ENTER:Set Delay Days\nUP/DN:scroll menu",
                     "ENTER:Set Mode\nUP/DN:scroll menu",
+                    "ENTER:Set Low V Stop\nUP/DN:scroll menu",
                     "ENTER:Set Diel Time\nUP/DN:scroll menu"
                     };
 
@@ -96,7 +98,8 @@ void printZero(int val){
 #define setChannels 7
 #define setDelay 8
 #define setMode 9
-#define setDielTime 10
+#define setCutoff 10
+#define setDielTime 11
 
 void manualSettings(){
   boolean startRec = 0, startUp, startDown;
@@ -241,6 +244,10 @@ void manualSettings(){
     delayDays = 0;
     writeEEPROMlong(18, delayDays);
   }
+  if (voltCutoff!=0 & (voltCutoff<30 | voltCutoff>34)) {
+    voltCutoff = 33;  // default 3.3 V
+    EEPROM.write(24, voltCutoff); //byte
+  }
 
   // Main Menu Loop
    while(startRec==0){
@@ -251,10 +258,10 @@ void manualSettings(){
     // Check for button press
     boolean selectVal = digitalRead(UP);
     if(recMode==MODE_DIEL){
-      maxMenuItem = 11;
+      maxMenuItem = 12;
     }
     else{
-      maxMenuItem = 10;
+      maxMenuItem = 11;
     }
     if(selectVal==0){
       while(digitalRead(UP)==0){
@@ -532,7 +539,30 @@ void manualSettings(){
           curMenuItem = setStart;
           break;
 
-        case setDielTime:         
+        case setCutoff:
+          {
+            int cutoffVal = (voltCutoff == 0) ? 29 : voltCutoff;  // 29 shows as Off, below 3.0 V
+            while(digitalRead(SELECT)==1){
+              cutoffVal = updateVal(cutoffVal, 29, 34);
+              voltCutoff = (cutoffVal == 29) ? 0 : cutoffVal;
+              cDisplay();
+              display.println("V Cutoff:");
+              if(voltCutoff == 0) display.print("Off");
+              else{
+                display.print(voltCutoff / 10.0, 1);
+                display.print("V");
+              }
+              displaySettings();
+              displayVoltage();
+              display.display();
+              delay(2);
+            }
+          }
+          while(digitalRead(SELECT)==0); // wait to let go
+          curMenuItem = setStart;
+          break;
+
+        case setDielTime:
           while(digitalRead(SELECT)==1){
             startHour = updateVal(startHour, 0, 23);
             cDisplay();
@@ -604,8 +634,18 @@ void manualSettings(){
   }
 }
 
+// Keep the internal RTC on DS3231 time so it can take over if the DS3231 fails
 void setTeensyTime(int hr, int mn, int sc, int dy, int mh, int yr){
-  // No-op: internal oscillator not available, DS3231 is the sole time source
+  tmElements_t tm;
+  tm.Year = yr - 1970;
+  tm.Month = mh;
+  tm.Day = dy;
+  tm.Hour = hr;
+  tm.Minute = mn;
+  tm.Second = sc;
+  time_t newtime;
+  newtime = makeTime(tm);
+  if(internalRtcOK & (Teensy3Clock.get() != newtime)) Teensy3Clock.set(newtime);
   autoStartTime = getTeensy3Time(0);
 }
   
@@ -801,6 +841,7 @@ void readEEPROM(){
   gainSetting = EEPROM.read(15);
   NCHAN = EEPROM.read(16);
   delayDays = readEEPROMlong(18);
+  voltCutoff = EEPROM.read(24);
 }
 
 union {
@@ -837,6 +878,7 @@ void writeEEPROM(){
   EEPROM.write(15, gainSetting); //byte
   EEPROM.write(16, NCHAN); //byte
   writeEEPROMlong(18, delayDays); //long
+  EEPROM.write(24, voltCutoff); //byte
 }
 
 void displayMenu(){
