@@ -40,6 +40,9 @@ float mAmpStereo[9] = { 36, 38, 43, 47, 48, 62, 90, 100, 107};
 // 300 kHz = 95 mA
 
 csd_t m_csd;
+uint32_t cardTotalMB = 0;
+uint32_t powerSeconds;       // deployment length the batteries allow
+float totalSecondsMemory;    // deployment length the card allows
 
 int curMenuItem = 0;
 volatile int maxMenuItem = 11;
@@ -167,6 +170,7 @@ void manualSettings(){
 
         Serial.print("Volume MB ");
         Serial.println(volumeMB);
+        cardTotalMB = volumeMB;
         
         if (freeSpace < 200) freeMB[n] = 0;
         else
@@ -248,11 +252,13 @@ void manualSettings(){
     voltCutoff = 33;  // default 3.3 V
     EEPROM.write(24, voltCutoff); //byte
   }
+  if (EEPROM.read(EE_SD_RESTARTS) == 255) EEPROM.write(EE_SD_RESTARTS, 0);     // never written
+  if (EEPROM.read(EE_LOW_BATT_STOP) == 255) EEPROM.write(EE_LOW_BATT_STOP, 0);
 
   // Main Menu Loop
    while(startRec==0){
     static int newYear, newMonth, newDay, newHour, newMinute, newSecond, oldYear, oldMonth, oldDay, oldHour, oldMinute, oldSecond;
-    checkSerialTime();  // time set from USB (tools/set-time.html)
+    checkSerialCommands();  // settings and time from USB (tools/logger-setup.html)
     t = getTeensy3Time(0);
     if (t - autoStartTime > 600) startRec = 1; //autostart if no activity for 10 minutes
     
@@ -718,6 +724,36 @@ void displaySettings(){
   display.setCursor(75, 46);
   display.printf("%.0f",gainDb);
 
+  calcDeployment();
+
+  if(powerSeconds < totalSecondsMemory){
+   // displayClock(getTeensy3Time(0) + powerSeconds, 45, 0);
+    display.setCursor(92, 38);
+    display.print("Lim B");
+    display.setCursor(92, 46);
+    display.print((int) powerSeconds / 86400);
+    display.print("d");
+  }
+  else{
+    display.setCursor(92, 38);
+    display.print("Lim M");
+    display.setCursor(92, 46);
+    display.print((int) totalSecondsMemory / 86400);
+    display.print("d");
+  }
+
+  display.setCursor(118, 46);
+  if(recMode==MODE_DIEL){
+    display.print("D");
+  }
+  else{
+    display.print("N");
+  }
+}
+
+// Estimate how long the batteries and the card will last with the current settings.
+// Also sets filesPerCard, which checkSD() counts down while recording.
+void calcDeployment(){
   float totalRecSeconds = 0;
 
   if(NCHAN==1) mAmpRec = mAmpMono[isf];
@@ -750,7 +786,7 @@ void displaySettings(){
   float sleepFraction = 1 - recFraction;
   float avgCurrentDraw = (recDraw * recFraction) + (mAmpSleep * sleepFraction);
 
-  uint32_t powerSeconds = uint32_t (3600.0 * (nBatPacks * mAhPerBat / avgCurrentDraw));
+  powerSeconds = uint32_t (3600.0 * (nBatPacks * mAhPerBat / avgCurrentDraw));
 
 //  Serial.print("fileMB FreeMBCards totalRecSeconds: ");
 //  Serial.print(fileMB); Serial.print(" ");
@@ -765,38 +801,13 @@ void displaySettings(){
     totalRecSeconds += (filesPerCard[n] * rec_dur);
   }
 
-  float totalSecondsMemory = totalRecSeconds / recFraction;
-  float totalSecondsCamMemory = 43200 / recFraction;
+  totalSecondsMemory = totalRecSeconds / recFraction;
 //
 //  Serial.print("Power Sec:");
 //  Serial.print(powerSeconds);
 //  Serial.print(" "); Serial.print((float) powerSeconds / 86400.0);
 //  Serial.print("  Mem Sec:");
 //  Serial.print(totalSecondsMemory);
-  
-  if(powerSeconds < totalSecondsMemory){
-   // displayClock(getTeensy3Time(0) + powerSeconds, 45, 0);
-    display.setCursor(92, 38);
-    display.print("Lim B");
-    display.setCursor(92, 46);
-    display.print((int) powerSeconds / 86400);
-    display.print("d");
-  }
-  else{
-    display.setCursor(92, 38);
-    display.print("Lim M");
-    display.setCursor(92, 46);
-    display.print((int) totalSecondsMemory / 86400);
-    display.print("d");
-  }
-
-  display.setCursor(118, 46);
-  if(recMode==MODE_DIEL){
-    display.print("D");
-  }
-  else{
-    display.print("N");
-  }
 }
 
 

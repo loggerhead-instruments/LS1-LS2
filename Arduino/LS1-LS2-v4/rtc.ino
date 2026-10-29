@@ -249,6 +249,7 @@ void clockInit(){
     if (t < 1678737100) setTime2(16, 0, 0, 1, 11, 2026 - 2000U); // DEFAULT_TIME
     // Check DS3231 oscillator status
     if(rtcStatus() & 0x80){ // OSF bit set — oscillator stopped
+      dsOscStopped = true;  // time may be wrong until it is set
       // Clear OSF flag and enable oscillator
       reset_alarm(); // clears status register 0x0F (including OSF)
 
@@ -296,41 +297,6 @@ void clockInit(){
   display.println("Check date/time");
   display.display();
   delay(5000);
-}
-
-// USB serial clock commands, checked from the menu (used by tools/set-time.html):
-//   T<seconds since 1970 UTC>  set the clock, e.g. T1793548800
-//   R                          report the clock
-// Both reply: TIME <seconds since 1970> <clock source> <firmware version>
-char serialCmd[16];
-int serialCmdLen = 0;
-
-void checkSerialTime(){
-  while(Serial.available()){
-    char c = Serial.read();
-    if(c != '\n' && c != '\r'){
-      if(serialCmdLen < (int) sizeof(serialCmd) - 1) serialCmd[serialCmdLen++] = c;
-      continue;
-    }
-    serialCmd[serialCmdLen] = 0;
-    serialCmdLen = 0;
-
-    if(serialCmd[0] == 'T'){
-      time_t newTime = strtoul(&serialCmd[1], NULL, 10);
-      if(newTime < 1678737100) continue;  // not a valid time
-      setTime2(hour(newTime), minute(newTime), second(newTime), day(newTime), month(newTime), year(newTime) - 2000U);
-      autoStartTime = getTeensy3Time(0);  // so the jump in time does not trigger autostart
-    }
-    else if(serialCmd[0] != 'R') continue;
-
-    t = getTeensy3Time(0);
-    Serial.print("TIME ");
-    Serial.print((uint32_t) t);
-    if(clockSource == CLOCK_DS3231) Serial.print(" DS3231 ");
-    else if(clockSource == CLOCK_INTERNAL) Serial.print(" INTERNAL ");
-    else Serial.print(" LPTMR ");
-    Serial.println(codeVersion);
-  }
 }
 
 // Sleep until wakeTime on whichever clock is working. The LPTMR also wakes the

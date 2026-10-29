@@ -164,6 +164,7 @@ SnoozeBlock config_off(snooze_audio);  // no wake source: sleeps until power is 
 int clockSource = CLOCK_DS3231;
 boolean internalRtcOK = false;
 boolean rtcFail = false;  // DS3231 has failed and a backup clock is in use
+boolean dsOscStopped = false;  // DS3231 oscillator stop flag was set at power-up
 float lpoHz = 1000.0;     // measured LPO frequency
 time_t softTime = 0;      // millis()-based clock used with the LPTMR
 uint32_t softMillis = 0;
@@ -171,6 +172,10 @@ uint32_t softMillis = 0;
 
 byte voltCutoff = 33;  // stop recording below this battery voltage, in tenths of a volt; 0 = off
 int lowVoltCount = 0;
+
+// EEPROM bytes read by the setup page (tools/logger-setup.html); cleared from the page
+#define EE_SD_RESTARTS 25    // count of resetFunc() restarts
+#define EE_LOW_BATT_STOP 26  // 1 if recording stopped on low battery
 
 // SD_FAT_TYPE = 0 for SdFat/File as defined in SdFatConfig.h,
 // 1 for FAT16/FAT32, 2 for exFAT, 3 for FAT16/FAT32 and exFAT.
@@ -750,6 +755,8 @@ time_t getTeensy3Time(boolean syncTeensy)
 
 void resetFunc(void){
   EEPROM.write(20, 1); // reset indicator register
+  byte sdRestarts = EEPROM.read(EE_SD_RESTARTS);
+  if(sdRestarts < 254) EEPROM.write(EE_SD_RESTARTS, sdRestarts + 1);
   if(mode == 1) file.close();  // close file if open
   // let the card finish any operation in progress before its power is cut
   if(sd.card()){
@@ -872,6 +879,7 @@ void lowVoltageStop(float voltage){
   delay(5000);
   display.ssd1306_command(SSD1306_DISPLAYOFF);
 
+  EEPROM.write(EE_LOW_BATT_STOP, 1);
   disable_alarm();  // so the DS3231 does not hold INT low
   digitalWrite(SGTL_EN, LOW);
   digitalWrite(LEDGREEN, LOW);
