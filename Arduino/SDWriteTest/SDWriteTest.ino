@@ -15,6 +15,10 @@
 // Every write is timed. A line per file goes to USB serial, and a summary is kept in
 // WRTEST.TXT in the card's root folder.
 //
+// Press UP+DOWN together to stop, as on the logger: the current file is closed with its
+// header updated, the results are saved, and the display says when it is safe to turn off.
+// During deep sleep the buttons are checked when the board wakes, at least once a minute.
+//
 // Filling a 1 TB card this way takes as long as a deployment. To reach the nearly-full state
 // sooner, set fastFillGB: that much is written back-to-back first, then the test runs as the
 // logger.
@@ -59,6 +63,8 @@ const float bufferSamples = (NCHAN == 2 ? 55 : 100) * 128;
 #define SGTL_EN 6
 #define LEDGREEN 17
 const int hydroPowPin = 2;
+const int UP = 4;
+const int DOWN = 3;
 
 #define OLED_RESET -1
 Adafruit_SSD1306 display(OLED_RESET);
@@ -132,7 +138,9 @@ uint32_t sleeps = 0;
 uint64_t bytesWritten = 0;
 uint32_t startMillis;
 boolean cardFailed = false;
+boolean stopped = false;   // UP+DOWN pressed
 boolean finished = false;
+uint32_t skippedNames = 0; // file names left by an earlier run
 
 // Results by twentieths of the test, to see whether writes slow down as the card fills
 #define NSEG 20
@@ -151,6 +159,8 @@ void setup() {
   delay(500);
 
   pinMode(LEDGREEN, OUTPUT);
+  pinMode(UP, INPUT_PULLUP);
+  pinMode(DOWN, INPUT_PULLUP);
   pinMode(hydroPowPin, OUTPUT);
   digitalWrite(hydroPowPin, LOW);  // hydrophone not needed
   pinMode(SGTL_EN, OUTPUT);
@@ -215,6 +225,10 @@ void setup() {
   targetGB = (float) filesToWrite * fileBytes / 1e9;
   if(filesToWrite == 0) halt("Card full");
 
+  // An earlier run on this card used the same simulated dates: start a year later so the
+  // file names do not clash (open with O_EXCL fails on an existing name)
+  while(sd.exists(rec_int > 0 ? folderName(t) : fileName(t))) t += 366UL * 86400;
+
   makeHeader();
   for(unsigned int i = 0; i < sizeof(buffer); i++) buffer[i] = random(256);  // stand-in for audio
   SdFile::dateTimeCallback(file_date_time);
@@ -235,12 +249,13 @@ void setup() {
 
 void loop() {
   if(finished) return;
-  if(cardFailed || filesWritten >= filesToWrite){
+  if(stopPressed()) stopped = true;
+  if(cardFailed || stopped || filesWritten >= filesToWrite){
     finished = true;
     endSegment();
     writeResults();
     showStats();
-    Serial.println(cardFailed ? "Stopped: card failed" : "Done");
+    Serial.println(cardFailed ? "Stopped: card failed" : stopped ? "Stopped: UP+DOWN" : "Done");
     return;
   }
 
@@ -256,10 +271,11 @@ void loop() {
       scheduled = true;
     }
     waitForStart();
+    if(stopped) return;
     nextStartMs += (rec_dur + rec_int) * 1000;  // startTime = stopTime + rec_int
   }
   writeFile(true);
-  if(rec_int > 0){
+  if(rec_int > 0 && !stopped){
     delay(100);  // stopRecording()
     sleepUntilStart();
   }
@@ -269,23 +285,41 @@ boolean filling(){
   return bytesWritten < fastFillGB * 1e9;
 }
 
+boolean stopPressed(){
+  return (digitalRead(UP)==0) & (digitalRead(DOWN)==0);
+}
+
+char *folderName(time_t when){
+  sprintf(dirname, "/%04d-%02d", year(when), month(when));
+  return dirname;
+}
+
+char *fileName(time_t when){
+  sprintf(filename,"%04d%02d%02dT%02d%02d%02d_%lu%lu_%2.1fdB_%2.1fV_ver%s.wav", year(when), month(when), day(when), hour(when), minute(when), second(when), myID[0], myID[1], gainDb, voltage, codeVersion);
+  return filename;
+}
+
 // One file, as FileInit(), continueRecording() and the file close do it.
 // paced: each write waits until that much audio would have arrived.
 void writeFile(boolean paced){
   // use folders for duty cycle record, as FileInit()
   if (folderMonth != month(t) & (rec_int > 0)){
     folderMonth = month(t);
-    sprintf(dirname, "/%04d-%02d", year(t), folderMonth);
+    folderName(t);
     sd.mkdir(dirname);
     sd.chdir(dirname);
   }
-  sprintf(filename,"%04d%02d%02dT%02d%02d%02d_%lu%lu_%2.1fdB_%2.1fV_ver%s.wav", year(t), month(t), day(t), hour(t), minute(t), second(t), myID[0], myID[1], gainDb, voltage, codeVersion);
+  fileName(t);
 
   uint32_t ms = millis();
   if(!file.open(filename, O_WRITE | O_CREAT | O_EXCL)){
+    t += rec_dur + rec_int;  // next file name
+    if(sd.exists(filename)){  // left by an earlier run, not a card error
+      skippedNames++;
+      return;
+    }
     openErrors++;
     Serial.printf("open failed %s\n", filename);
-    t += rec_dur + rec_int;  // next file name
     recoverCard();
     return;
   }
@@ -334,6 +368,19 @@ void writeFile(boolean paced){
     }
     bytesWritten += NREC*512;
     if(paced) fileDropped += audioOverflow();
+
+    if(stopPressed()){
+      // stop recording, as the logger: update the wav header with the length written
+      wav_hdr.dLen = (w + 1) * NREC * 512;
+      wav_hdr.rLen = 36 + wav_hdr.dLen;
+      file.seek(0);
+      file.write((uint8_t *)&wav_hdr, 44);
+      file.close();
+      bytesWritten += 44;
+      stopped = true;
+      Serial.printf("stopped in %s after %lu writes\n", filename, w + 1);
+      return;
+    }
   }
 
   ms = millis();
@@ -388,6 +435,10 @@ void sleepUntilStart(){
       if(chunk > 60000) chunk = 60000;  // the logger's LPTMR wakes at least once a minute
       lptmr.setTimer(chunk);
       Snooze.deepSleep(config_sleep);   // Snooze adds the sleep time to millis()
+      if(stopPressed()){
+        stopped = true;
+        return;
+      }
     }
     delay(300);  // give time for Serial to reconnect to USB
   }
@@ -396,7 +447,13 @@ void sleepUntilStart(){
 // Standby until the scheduled start; the logger updates its display here
 void waitForStart(){
   showStats();
-  while((long) (nextStartMs - millis()) > 0) asm("wfi");
+  while((long) (nextStartMs - millis()) > 0){
+    if(stopPressed()){
+      stopped = true;
+      return;
+    }
+    asm("wfi");
+  }
 }
 
 void recordWrite(uint32_t us){
@@ -487,6 +544,7 @@ void showStats(){
   display.setCursor(0, 0);
   display.printf("%s %luKB ", fsName, clusterKB);
   if(cardFailed) display.println("CARD FAIL");
+  else if(stopped) display.println("STOPPED");
   else if(finished) display.println("DONE");
   else if(filling()) display.println("fill");
   else display.println("logger");
@@ -496,10 +554,15 @@ void showStats(){
   display.printf(">250:%lu >600:%lu >1s:%lu\n", slowCount[2], slowCount[3], slowCount[4]);
   display.printf("Err W%lu O%lu Rst%lu\n", writeErrors, openErrors, restarts);
   display.printf("Drop%.1fs Op%lu Cl%lu\n", droppedSamples / audio_srate, maxOpenMs, maxCloseMs);
-  printDuration(display, elapsed);
-  if(!finished && rate > 0){
-    display.print(" ETA ");
-    printDuration(display, (uint32_t) ((targetGB - gb) * 1000 / rate));
+  if(finished){
+    display.print("Safe to turn off");
+  }
+  else{
+    printDuration(display, elapsed);
+    if(rate > 0){
+      display.print(" ETA ");
+      printDuration(display, (uint32_t) ((targetGB - gb) * 1000 / rate));
+    }
   }
   display.display();
 }
@@ -510,7 +573,7 @@ void writeResults(){
   if(!rf.open("/WRTEST.TXT", O_WRITE | O_CREAT | O_TRUNC)) return;
   uint32_t elapsed = (millis() - startMillis) / 1000;
   rf.printf("SD write test (mirrors LS1-LS2-v4 %s)\r\n", codeVersion);
-  rf.printf("State: %s\r\n", cardFailed ? "card failed" : finished ? "done" : "running");
+  rf.printf("State: %s\r\n", cardFailed ? "card failed" : stopped ? "stopped with UP+DOWN" : finished ? "done" : "running");
   rf.printf("Card: %c%c%c%c%c SN %08lX made %d/%d, %.1f GB, %s, %lu KB clusters\r\n",
     cid.pnm[0], cid.pnm[1], cid.pnm[2], cid.pnm[3], cid.pnm[4], cid.psn,
     cid.mdt_month, 2000 + (cid.mdt_year_high << 4) + cid.mdt_year_low, cardGB, fsName, clusterKB);
@@ -525,6 +588,7 @@ void writeResults(){
   rf.printf("Max open %lu ms, max close %lu ms\r\n", maxOpenMs, maxCloseMs);
   rf.printf("Audio dropped (estimate, logger timing only): %.1f s over %lu writes\r\n", droppedSamples / audio_srate, dropWrites);
   rf.printf("Errors: write %lu, open %lu, card restarts %lu\r\n", writeErrors, openErrors, restarts);
+  rf.printf("File names skipped (left by an earlier run): %lu\r\n", skippedNames);
   rf.printf("\r\nBy twentieth of the test:\r\npart,from_GB,MB_per_s,max_write_ms,writes_over_100ms\r\n");
   for(int i = 0; i < NSEG; i++){
     rf.printf("%d,%.1f,%.2f,%u,%lu\r\n", i + 1, i * targetGB / NSEG, segMBps[i], segMaxMs[i], segSlow[i]);
