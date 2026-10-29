@@ -893,18 +893,13 @@ void displayVoltage(){
   display.setCursor(100, 0);
   display.print(readVoltage(),1);
   display.print("V");
-  display.setCursor(72, 0);
-  display.print(codeVersion);
-  if(rtcFail){
-    display.setCursor(72, 8);
-    display.print("RTC!");
-  }
 }
 
 void displayChannels(){
   display.setTextSize(1);
   display.setCursor(100, 8);
-  if(NCHAN==1) display.print("Mono");
+  if(rtcFail & ((millis() / 1000) % 2)) display.print("RTC!");  // alternate with channels each second
+  else if(NCHAN==1) display.print("Mono");
   else {
     display.setCursor(90, 8);
     display.print("Stereo");
