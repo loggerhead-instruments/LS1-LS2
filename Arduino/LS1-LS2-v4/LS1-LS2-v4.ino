@@ -95,6 +95,7 @@ int chipSelect[4];
 int sdPowSelect[4];
 uint32_t freeMB[4];
 uint32_t filesPerCard[4];
+float fileMB;  // file size including a cluster, set by calcDeployment()
 volatile int currentCard = 0;
 boolean newCard = 0;
 
