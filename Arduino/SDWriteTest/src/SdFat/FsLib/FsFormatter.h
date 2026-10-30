@@ -24,8 +24,8 @@
  */
 #ifndef FsFormatter_h
 #define FsFormatter_h
-#include "FatLib/FatLib.h"
-#include "ExFatLib/ExFatLib.h"
+#include "../FatLib/FatLib.h"
+#include "../ExFatLib/ExFatLib.h"
 /**
  * \class FsFormatter
  * \brief Format a exFAT/FAT volume.

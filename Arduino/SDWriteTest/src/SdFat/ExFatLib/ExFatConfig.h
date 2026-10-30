@@ -24,7 +24,7 @@
  */
 #ifndef ExFatConfig_h
 #define ExFatConfig_h
-#include "SdFatConfig.h"
+#include "../SdFatConfig.h"
 
 #ifndef EXFAT_READ_ONLY
 #define EXFAT_READ_ONLY 0
