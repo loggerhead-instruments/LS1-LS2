@@ -263,6 +263,7 @@ struct TIME_HEAD
 };
 
 void setup() {
+  rtcOscStart();  // 32 kHz crystal load first, so it settles during start-up
   read_myID();
 
   // A software reset (resetFunc) or a watchdog reset during a deployment goes straight back
@@ -277,30 +278,33 @@ void setup() {
   sdPowSelect[0] = SDPOW1;
   
   Serial.begin(baud);
-  delay(500);
-  Serial.printf("Reset SRS0 %02X SRS1 %02X%s\n", RCM_SRS0, RCM_SRS1, resumeDeployment ? ", resuming the deployment" : "");
 
+  // Pins
   pinMode(LEDGREEN, OUTPUT);
   digitalWrite(LEDGREEN, HIGH);
-  
-  Wire.begin();
   pinMode(DS3231_INT_PIN, INPUT_PULLUP); // DS3231 INT, not used to wake; read for diagnostics
   pinMode(vSense, INPUT);
   analogReference(INTERNAL);
-  
   pinMode(hydroPowPin, OUTPUT);
   digitalWrite(hydroPowPin, HIGH);
-
   pinMode(SDPOW1, OUTPUT);
+  digitalWrite(SDPOW1, LOW); // start cards switched off in case of reset
   pinMode(SGTL_EN, OUTPUT);
-  digitalWrite(SDPOW1, LOW); // start cardsswitched off in case of reset
-  digitalWrite(SGTL_EN, HIGH);
-  
-  //setup display and controls
   pinMode(UP, INPUT_PULLUP);
   pinMode(DOWN, INPUT_PULLUP);
   pinMode(SELECT, INPUT_PULLUP);
-  
+
+  // Power-cycle the codec on every start: SGTL_EN has no pull-up or pull-down, so it floats
+  // during a reset. Done before anything uses I2C (an unpowered codec holds the bus), with the
+  // I2S clock pins low so they cannot power it. This is also the wait for serial.
+  digitalWrite(SGTL_EN, LOW);
+  i2sPinsLow();  // AudioInit() returns them to I2S
+  delay(250);
+  digitalWrite(SGTL_EN, HIGH);
+  delay(250);
+  Serial.printf("Reset SRS0 %02X SRS1 %02X%s\n", RCM_SRS0, RCM_SRS1, resumeDeployment ? ", resuming the deployment" : "");
+
+  Wire.begin();
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  //initialize display
   delay(140);
   cDisplay();
@@ -309,18 +313,7 @@ void setup() {
   display.print("Version ");
   display.println(codeVersion);
   display.display();
-  delay(500); // leave splash up long enough to read the version
-
-  // Power-cycle the codec and hydrophone on every start: their enables have no pull-up or
-  // pull-down, so they float during a reset. Done while the splash is up and nothing uses I2C
-  // (an unpowered codec holds the bus), with the I2S clock pins low so they cannot power it.
-  digitalWrite(SGTL_EN, LOW);
-  digitalWrite(hydroPowPin, LOW);
-  i2sPinsLow();  // AudioInit() returns them to I2S
-  delay(250);
-  digitalWrite(SGTL_EN, HIGH);
-  digitalWrite(hydroPowPin, HIGH);
-  delay(250);
+  delay(1000); // leave splash up long enough to read the version
 
   watchdogStart();
 

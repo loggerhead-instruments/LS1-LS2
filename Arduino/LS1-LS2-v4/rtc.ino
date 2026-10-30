@@ -145,19 +145,18 @@ boolean ds3231Running(){
   return false;
 }
 
-// Start the internal 32.768 kHz oscillator (26 pF load for the 12.5 pF crystal) if it is
-// not already running that way, and check that the internal RTC is counting.
-// A CPU restart leaves it running, so the time is kept across resetFunc().
-boolean internalRTCRunning(){
+// Internal 32.768 kHz oscillator on, with a 26 pF load for the 12.5 pF crystal. Called first in
+// setup(), so the crystal settles while the rest starts. The Teensy core starts the oscillator
+// before setup() with its own load; the load is changed without stopping it. A CPU restart
+// leaves it running, so the time is kept across resetFunc().
+void rtcOscStart(){
   uint32_t rtcCR = RTC_CR_SC16P | RTC_CR_SC8P | RTC_CR_SC2P | RTC_CR_OSCE;
-  if(RTC_CR != rtcCR){
-    RTC_CR = 0;
-    delay(100);
-    RTC_CR = RTC_CR_SC16P | RTC_CR_SC8P | RTC_CR_SC2P;
-    delay(100);
-    RTC_CR = rtcCR;
-    delay(100);
-  }
+  if(RTC_CR != rtcCR) RTC_CR = rtcCR;
+}
+
+// Check that the internal RTC is counting
+boolean internalRTCRunning(){
+  rtcOscStart();  // in case it was stopped since
   if(!(RTC_SR & RTC_SR_TCE) || (RTC_SR & RTC_SR_TIF)) Teensy3Clock.set(DEFAULT_TIME); // start the counter
   uint32_t start = RTC_TSR;
   uint32_t startMillis = millis();
