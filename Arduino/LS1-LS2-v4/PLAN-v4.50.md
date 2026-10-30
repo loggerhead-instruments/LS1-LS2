@@ -29,7 +29,8 @@ Recent bench and field results:
 - `sleepDiags` (on in 4.41): each sleep and wake printed on USB serial with the wake source, INT
   pin, internal RTC time and the DS3231 time, control and status registers. (These were lost while
   USB reconnected; 4.42 stores them and prints them at Record Start.)
-- Proper I2C STOP in `readRTC()` and `rtcStatus()` (review problem 1).
+- Changed the I2C transactions in `readRTC()` and `rtcStatus()` (review problem 1). Undone in
+  4.50: problem 1 was not a real problem (see there).
 
 ## Done in 4.42 (bench build)
 
@@ -48,8 +49,11 @@ Recent bench and field results:
 
 ## Problems found in review
 
-1. `readRTC()` and `rtcStatus()` never send an I2C STOP and call a stray `endTransmission()`,
-   leaving the bus half-finished going into every sleep.
+1. ~~`readRTC()` and `rtcStatus()` never send an I2C STOP and call a stray `endTransmission()`,
+   leaving the bus half-finished going into every sleep.~~ **Not a real problem; do not "fix" it.**
+   In Teensyduino's Wire (WireKinetis), the `endTransmission()` after the read sends a repeated
+   start, writes the register address again and then sends a STOP, so every read ends with the
+   bus released. This pattern has read DS3231s in every firmware up to 4.40; 4.50 uses it again.
 2. `FileInit()` fallback names (`F000001.wav`) open the file twice, so one failed open always
    ends in `resetFunc()` after 20 tries, even when the card works. In continuous mode it also
    calls `chdir()` with an empty folder name.
@@ -83,7 +87,8 @@ Recent bench and field results:
 
 ## B. Clock
 
-1. **Proper I2C STOP** in `readRTC()` and `rtcStatus()`; remove the stray `endTransmission()` calls.
+1. ~~Proper I2C STOP in `readRTC()` and `rtcStatus()`~~: dropped, see review problem 1. The
+   4.40 transactions are kept.
 2. **DS3231 check against the internal RTC.** The DS3231 stays the reference clock (temperature
    compensated, lower drift). The comparison is only meaningful when **both clocks are ticking**, so
    at each sync:
@@ -244,3 +249,9 @@ stop, 28 deployment running.
 - **`millis()` (B5):** corrected in `sleepUntil()` after every wake: by the internal RTC (seconds
   and prescaler) after an alarm wake, by the calibrated LPO after an LPTMR wake. The RTC is not
   used after an LPTMR wake, so a stopped internal RTC still shows as not counting.
+- **Good DS3231 marked as failed (fixed in 4.50, present since 4.41):** `setTeensyTime()` called
+  `getTeensy3Time(0)` for the menu autostart time, so the stuck check ran in the middle of the
+  first internal RTC sync, against a reference still on the internal RTC's old time. At power-up
+  the internal RTC holds the compile time (local, hours behind the DS3231's UTC), so the jump
+  looked like a stopped DS3231. Found when a new DS3231S was rejected while the December 2024
+  firmware read it. Earlier "DS3231 failed" reports on 4.41–4.42 may have been this bug.
