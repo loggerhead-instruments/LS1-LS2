@@ -203,10 +203,10 @@ void manualSettings(){
         Serial.print("volFree:");
         Serial.println(volFree);
 
-        float fs = 0.000512 * volFree * sd.vol()->blocksPerCluster();
+        float fs = 0.000512 * volFree * sd.vol()->sectorsPerCluster();
 
         uint32_t freeSpace = (uint32_t) fs;
-        uint32_t volumeMB = uint32_t ( 0.000512 * (float) sd.card()->cardSize());
+        uint32_t volumeMB = uint32_t ( 0.000512 * (float) sd.card()->sectorCount());
 
         Serial.print("Volume MB ");
         Serial.println(volumeMB);

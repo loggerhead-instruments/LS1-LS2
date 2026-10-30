@@ -40,16 +40,15 @@
 //
 // Prepare the card the way you want to test it (Windows quick format, SD Card Formatter
 // overwrite, or the SdFat SdFormatter example), then power up the board.
-// Compile as for the logger: Teensy 3.2, 96 MHz. The test uses its own copy of SdFat in
-// src/SdFat (Teensyduino's SdFat 2.1.2, see SOURCE.txt), not the SdFat-beta library the logger
-// uses; the write timeout is the same. Keep the build's .elf to look up the program address
-// after a hang.
+// Compile as for the logger: Teensy 3.2, 96 MHz. The test and the logger each carry the same
+// copy of SdFat in src/SdFat (Teensyduino's SdFat 2.1.2, see SOURCE.txt), so no installed SdFat
+// library is used. Keep the build's .elf to look up the program address after a hang.
 //
 
 #include <SPI.h>
 #include <Wire.h>
 #include <EEPROM.h>
-#include "src/SdFat/SdFat.h"  // this sketch's own copy (src/SdFat/SOURCE.txt), not the SdFat-beta library
+#include "src/SdFat/SdFat.h"  // this sketch's own copy (src/SdFat/SOURCE.txt), not an installed SdFat library
 #include <Snooze.h>
 #include <TimeLib.h>
 #include <Adafruit_GFX.h>
@@ -146,7 +145,7 @@ boolean audioRunning = false;
 uint32_t audioLastUs;
 double audioProduced, audioConsumed;  // samples per channel
 
-const uint16_t slowMs[] = {50, 100, 250, 600, 1000};  // 600 ms is SdFat-beta's write timeout
+const uint16_t slowMs[] = {50, 100, 250, 600, 1000};  // 600 ms is SdFat's write timeout
 #define NSLOW 5
 #define NSEG 20  // results by twentieths of the test, to see whether writes slow down as the card fills
 

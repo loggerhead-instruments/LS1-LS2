@@ -33,7 +33,7 @@ int NCHAN = 2;
 #include <Audio.h>  //this also includes SD.h from lines 89 & 90
 #include <Wire.h>
 #include <SPI.h>
-#include "SdFat.h"
+#include "src/SdFat/SdFat.h"  // this sketch's own copy (src/SdFat/SOURCE.txt), not an installed SdFat library
 #include <Snooze.h>  //using https://github.com/duff2013/Snooze; uncomment line 62 #define USE_HIBERNATE
 #include <TimeLib.h>
 #include <Adafruit_GFX.h>
@@ -1028,7 +1028,7 @@ void checkSD(){
     // The power-up estimate says the card is full. Count the free space before stopping.
     int32_t volFree = sd.vol()->freeClusterCount();
     if(volFree <= 0) resetFunc();  // count failed (a full card still has the 200 MB margin): restart and retry the card
-    float freeSpace = 0.000512 * volFree * sd.vol()->blocksPerCluster();
+    float freeSpace = 0.000512 * volFree * sd.vol()->sectorsPerCluster();
     if (freeSpace < 200) freeMB[currentCard] = 0;
     else freeMB[currentCard] = freeSpace - 200; // same 200 MB margin as at power-up
     if (freeMB[currentCard] > fileMB) filesPerCard[currentCard] = (uint32_t) floor(freeMB[currentCard] / fileMB);
