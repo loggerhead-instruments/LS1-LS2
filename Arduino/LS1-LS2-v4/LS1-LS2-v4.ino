@@ -17,9 +17,9 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "4.41";
+char codeVersion[5] = "4.42";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
-static boolean sleepDiags = 1;  // 1: print each sleep and wake on USB serial (bench diagnostics); 0 for deployment
+static boolean sleepDiags = 1;  // 1: bench diagnostics (diag.ino): wake log and no-audio report on USB serial; 0 for deployment
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
 int wakeahead = 4;  //wake from snooze to give hydrophone to power up
@@ -332,6 +332,8 @@ void setup() {
   if((delayDays > 0) & !resumeDeployment){
     // power down SD, SGTL
     digitalWrite(hydroPowPin, LOW);
+    audioSleep();
+    i2sPinsLow();  // the codec power is cut in each sleep; AudioInit() below restores the pins
     digitalWrite(SDPOW1, LOW);
     
     // sleep walk (~3.7 mA current)
@@ -429,6 +431,7 @@ void loop() {
           audio_bypass_adc_hp();
          }
         Serial.println("Record Start.");
+        if(sleepDiags) printWakeLog();  // wakes from the sleep that just ended
 
         // set current stop time and calculate next startTime
         if(recMode==MODE_NORMAL){
@@ -466,6 +469,7 @@ void loop() {
   // Record mode
   if (mode == 1) {
     continueRecording();  // download data  
+    if(sleepDiags) checkAudioFlow();
 
     if(digitalRead(UP)==0 & digitalRead(DOWN)==0){
       // stop recording
@@ -512,8 +516,7 @@ void loop() {
             time_t wakeTime = getTeensy3Time(0) + sleepSeconds;
 
             digitalWrite(hydroPowPin, LOW); //hydrophone off
-            audio_power_down();
-            I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE); // de-select audio
+            audioSleep();  // codec down, then I2S stopped; AudioInit() restarts the I2S, then the codec
 
             if(printDiags){
               Serial.print("Sleep seconds: ");
@@ -544,6 +547,7 @@ void startRecording() {
   buf_count = 0;
   queue1.begin();
   if(NCHAN==2) queue2.begin();
+  if(sleepDiags) diagRecordStart();
   if (printDiags)  Serial.println("Queue Begin");
 }
 
@@ -894,8 +898,7 @@ void stopForGood(int eeFlag, const char *title, const char *detail){
   queue1.end();
   if(NCHAN==2) queue2.end();
   digitalWrite(hydroPowPin, LOW);
-  audio_power_down();
-  I2S0_RCSR &= ~(I2S_RCSR_RE | I2S_RCSR_BCE); // de-select audio
+  audioSleep();
 
   // let the card finish any operation in progress, then switch it off
   if(sd.card()){
@@ -921,6 +924,7 @@ void stopForGood(int eeFlag, const char *title, const char *detail){
   EEPROM.write(eeFlag, 1);
   EEPROM.write(EE_DEPLOYED, 0);  // deployment is over
   disable_alarm();  // so the DS3231 does not hold INT low
+  i2sPinsLow();  // before the codec power is cut
   digitalWrite(SGTL_EN, LOW);
   digitalWrite(LEDGREEN, LOW);
   while(1) Snooze.deepSleep(config_off);

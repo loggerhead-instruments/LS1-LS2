@@ -132,16 +132,6 @@ int readDSRegs(byte *reg, int count){
 }
 
 // Bench diagnostics (sleepDiags): the wake source and the state of both clocks on USB serial
-void printWake(int who){
-  byte reg[16];
-  Serial.printf("wake %d (16 DS INT, 35 RTC alarm, 36 LPTMR) clk %d int %lu INT pin %d DS", who, clockSource,
-    (uint32_t) Teensy3Clock.get(), digitalRead(DS3231_INT_PIN));
-  if(readDSRegs(reg, 16) == 16){
-    Serial.printf(" %02X:%02X:%02X %02X/%02X/%02X ctrl %02X stat %02X", reg[2], reg[1], reg[0], reg[4], reg[5], reg[6], reg[14], reg[15]);
-  }
-  else Serial.print(" no reply");
-  Serial.println();
-}
 
 // True if the DS3231 answers with a valid time and is counting
 boolean ds3231Running(){
@@ -305,10 +295,6 @@ void sleepUntil(time_t wakeTime, boolean sgtlOff){
     if(ticks > 65000) ticks = 65000;
     lptmr.setTimer(ticks);
 
-    if(sleepDiags){
-      Serial.printf("sleep %ld s clk %d int %lu\n", secs, clockSource, (uint32_t) Teensy3Clock.get());
-      Serial.flush();
-    }
     if(sgtlOff) digitalWrite(SGTL_EN, LOW);
     int who;
     if(internalRtcOK){
@@ -321,6 +307,6 @@ void sleepUntil(time_t wakeTime, boolean sgtlOff){
 
     // Snooze adds the LPTMR ticks to millis() as if they were ms; correct to real time
     if(who == LPTMR_WAKE) softMillis += ticks - (uint32_t) (ticks * 1000.0 / lpoHz);
-    if(sleepDiags) printWake(who);
+    if(sleepDiags) wakeLogAdd(who, secs);  // printed at Record Start, once USB is back
   }
 }

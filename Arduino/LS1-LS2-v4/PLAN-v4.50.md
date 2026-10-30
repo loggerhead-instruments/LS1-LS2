@@ -26,6 +26,19 @@ Recent bench and field results:
   pin, internal RTC time and the DS3231 time, control and status registers.
 - Proper I2C STOP in `readRTC()` and `rtcStatus()` (review problem 1).
 
+## Done in 4.42 (bench build)
+
+- **Audio stops properly before deep sleep.** Bench boards sometimes woke, opened the next file and
+  then got no audio (40 mA, no LED, stuck after `Queue Begin`). The 2024 code noted the same
+  fault ("no LRCLK signal or RX on Teensy"). Since 4.10 the deep sleep stops all fast clocks while
+  the I2S transmitter was still running. Now `audioSleep()` powers the codec down over I2C, then
+  `i2sStop()` stops the I2S receiver and transmitter at a frame end, resets the FIFOs, clears the
+  error flags and parks the receive DMA. On waking, `I2S_modification()` sets the clocks only while
+  the I2S is stopped and `i2sStart()` restarts it as the audio library does, before the codec is
+  powered up. Where the codec power is cut (delayed start, stops), the I2S clock pins are driven
+  low first so they do not power the codec through its pins.
+- `diag.ino`: wake log printed at Record Start, and a no-audio report (serial and display).
+
 ## Problems found in review
 
 1. `readRTC()` and `rtcStatus()` never send an I2C STOP and call a stray `endTransmission()`,
@@ -101,7 +114,17 @@ Recent bench and field results:
 - Watchdog reset count, with Clear.
 - Clock-switch report with the time, with Clear.
 
-## E. Version
+## E. Display start-up
+
+Some boards occasionally power up with the display dark while the firmware runs normally (green
+LED on, normal serial start-up). Seen before 4.40 as well. The display has no reset line, so it relies on its own
+power-on reset, which can end before a slowly rising supply settles; it then ignores the single
+`display.begin()` in `setup()`.
+
+- On power-on only (RCM_SRS0 POR set), call `display.begin()` a second time about 150 ms after
+  the first. Software restarts and the re-inits after each wake and the manual stop stay as now.
+
+## F. Version
 
 Bump to **4.50**.
 
@@ -132,4 +155,6 @@ stop, 28 deployment running.
   even with a high-idle card, and files continue in the same folder.
 - **Card failures:** pull the card during a deployment; the logger restarts and resumes. A dead
   card reaches the hourly back-off after 5 failures.
+- **Display start-up:** power the board on and off 20 times; the display shows the splash screen
+  every time.
 - **Coin cell:** fit a coin cell on bench boards before judging DS3231 stop-flag results.
