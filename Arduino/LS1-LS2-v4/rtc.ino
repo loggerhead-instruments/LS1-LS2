@@ -39,6 +39,9 @@ void setTime2(int thour,int tminute,int tsecond,int tday,int tmonth,int tyear)
   if(internalRtcOK) Teensy3Clock.set(newTime);
   setSoftTime(newTime);
   syncDs = syncRtc = newTime;  // both clocks start again from the time just set
+  lastDsTime = newTime;        // and the stuck check
+  lastDsChange = millis();
+  lastDsChangeRtc = internalRtcOK ? newTime : Teensy3Clock.get();
 }
 
 void set_alarm(int thour, int tminute)

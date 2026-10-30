@@ -796,8 +796,9 @@ time_t getTeensy3Time(boolean syncTeensy)
         long sinceSync = (long) (t - syncDs);
         if(syncTeensy & ((syncDs == 0) | (sinceSync >= 5) | (sinceSync < 0))){
           if(internalRtcOK) checkInternalRtc(t);
+          time_t rtcBefore = Teensy3Clock.get();
           setTeensyTime(hour(t),minute(t),second(t),day(t),month(t),year(t)); // sync from DS3231 to Teensy time
-          if(changed) lastDsChangeRtc = Teensy3Clock.get();  // measure from the synced time
+          lastDsChangeRtc += Teensy3Clock.get() - rtcBefore;  // keep the stuck check on the internal RTC's new time
           syncDs = t;
           syncRtc = Teensy3Clock.get();
         }

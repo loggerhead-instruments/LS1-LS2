@@ -733,7 +733,7 @@ void setTeensyTime(int hr, int mn, int sc, int dy, int mh, int yr){
   time_t newtime;
   newtime = makeTime(tm);
   if(internalRtcOK & (Teensy3Clock.get() != newtime)) Teensy3Clock.set(newtime);
-  autoStartTime = getTeensy3Time(0);
+  autoStartTime = newtime;  // not getTeensy3Time(): this runs inside it, mid-sync
 }
   
 int updateVal(long curVal, long minVal, long maxVal){
