@@ -79,17 +79,19 @@ boolean readRTC()
   // Serial.println("Read DS3231: ");
   int i = 0;
   byte buff[7];
+  // Same transaction as the firmware that has always read the DS3231 (4.40 and earlier)
   Wire.beginTransmission(RTCAddress);
   Wire.write(0x00);        //sends address to read from starting with seconds
-  Wire.endTransmission(0); // no stop: repeated start for the read
+  Wire.endTransmission(0); //end transmission
 
-  Wire.requestFrom(RTCAddress, 7, 1);    // request 7 bytes from clock (seconds through Year), then stop
+  Wire.requestFrom(RTCAddress, 7, 0);    // request 7 bytes from clock (seconds through Year)
 
   while(Wire.available() && i < 7)
   {
     buff[i] = Wire.read();  // receive one byte
     i++;
   }
+  Wire.endTransmission();
 
   if (i==7)  // All bytes received?
   {
@@ -116,10 +118,15 @@ boolean readRTC()
   else return 0;
 }
 
+// Status register 0x0F, read as the firmware that has always read the DS3231 (4.40 and earlier)
 int rtcStatus(){
-  byte reg[16];
-  if(readDSRegs(reg, 16) < 16) return 0xFF;  // no reply: treat as stopped
-  return reg[15];  // status register 0x0F
+  Wire.beginTransmission(RTCAddress);
+  Wire.write(0x0F);
+  Wire.endTransmission();
+  if(Wire.requestFrom(RTCAddress, 1) != 1) return 0xFF;  // no reply: treat as stopped
+  int val = Wire.read();
+  Wire.endTransmission();
+  return val;
 }
 
 // Read DS3231 registers from 0x00. Returns the number of bytes read.
@@ -270,6 +277,7 @@ void clockInit(){
     }
   }
 
+  if(!dsOK) Serial.println("DS3231 does not answer");
   if(dsOK){
     if (t < TIME_2026) setTime2(16, 0, 0, 1, 11, 2026 - 2000U); // DEFAULT_TIME
     // Check DS3231 oscillator status
@@ -298,7 +306,10 @@ void clockInit(){
       display.display();
       delay(3000);
     }
-    else dsOK = ds3231Running();
+    else{
+      dsOK = ds3231Running();
+      if(!dsOK) Serial.println("DS3231 answers but is not counting");
+    }
   }
 
   if(dsOK){
