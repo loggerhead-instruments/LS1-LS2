@@ -3,12 +3,13 @@
 //
 // Writes files to the card the way LS1-LS2-v4 records a duty cycle:
 // - the same SdFat calls (sd.begin, mkdir/chdir, open, write, close), a 44-byte header
-//   followed by 16384-byte writes (NREC * 512), the same file size, names and monthly folders
+//   followed by 16384-byte writes (NREC * 512), the same file size, names and day folders
 // - each write happens when that much audio would have arrived (every 85 ms at 48 kHz stereo)
 // - between files, the same steps as the logger: 100 ms after closing (stopRecording), deep
 //   sleep with the card left powered, wake 4 s early (wakeahead), 300 ms after waking, then
 //   standby until the scheduled start. Sleeps under 10 s are skipped, as on the logger.
-// - continuous mode (rec_int = 0): close and open the next file while audio keeps arriving
+// - continuous mode (rec_int = 0): close and open the next file while audio keeps arriving,
+//   so the open time counts against the audio buffer
 // Audio itself is not recorded; the buffer is a stand-in. The display stays on with the
 // results and is only updated between files, when the logger also uses it.
 //
@@ -39,7 +40,7 @@
 
 //*********** Settings: match the deployment being tested ***********
 const unsigned long rec_dur = 300;     // record duration (s)
-const unsigned long rec_int = 10;      // sleep between recordings (s); 0 = continuous, all files in root
+const unsigned long rec_int = 10;      // sleep between recordings (s); 0 = continuous
 const float audio_srate = 48000;       // sample rate (Hz)
 const int NCHAN = 2;                   // channels
 const float fastFillGB = 0;            // write this many GB back-to-back first, then run as the logger
@@ -95,7 +96,7 @@ HdrStruct wav_hdr;
 byte buffer[NREC*512];
 char filename[100];
 char dirname[20];
-int folderMonth = -1;
+long folderDate = -1;  // YYYYMMDD of the current folder
 uint32_t myID[2];
 unsigned long nbufs_per_file;
 uint32_t writesPerFile;
@@ -227,7 +228,7 @@ void setup() {
 
   // An earlier run on this card used the same simulated dates: start a year later so the
   // file names do not clash (open with O_EXCL fails on an existing name)
-  while(sd.exists(rec_int > 0 ? folderName(t) : fileName(t))) t += 366UL * 86400;
+  while(sd.exists(folderName(t))) t += 366UL * 86400;
 
   makeHeader();
   for(unsigned int i = 0; i < sizeof(buffer); i++) buffer[i] = random(256);  // stand-in for audio
@@ -290,7 +291,7 @@ boolean stopPressed(){
 }
 
 char *folderName(time_t when){
-  sprintf(dirname, "/%04d-%02d", year(when), month(when));
+  sprintf(dirname, "/%04d-%02d-%02d", year(when), month(when), day(when));
   return dirname;
 }
 
@@ -302,9 +303,10 @@ char *fileName(time_t when){
 // One file, as FileInit(), continueRecording() and the file close do it.
 // paced: each write waits until that much audio would have arrived.
 void writeFile(boolean paced){
-  // use folders for duty cycle record, as FileInit()
-  if (folderMonth != month(t) & (rec_int > 0)){
-    folderMonth = month(t);
+  // a folder for each day, as FileInit()
+  long today = year(t) * 10000L + month(t) * 100 + day(t);
+  if (folderDate != today){
+    folderDate = today;
     folderName(t);
     sd.mkdir(dirname);
     sd.chdir(dirname);
@@ -486,7 +488,7 @@ void recoverCard(){
   for(int attempt = 0; attempt < 5; attempt++){
     sdPowerCycle();
     if(sd.begin(CS1)){
-      if(rec_int > 0) sd.chdir(dirname);
+      if(dirname[0]) sd.chdir(dirname);
       return;
     }
   }

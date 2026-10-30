@@ -135,6 +135,15 @@ Recent bench and field results:
 4. **Back off after repeated card failures:** after 5 failed restarts in a row, sleep 1 hour with
    the card off, then try again, for as long as the batteries last. The counter is kept in a chip
    register that survives restarts (not EEPROM), so no wear.
+5. **A folder for each day** (`/YYYY-MM-DD`) in both modes, instead of monthly folders for duty
+   cycles and the root folder for continuous recording. Creating a file reads every entry in its
+   folder (SdFat exFAT), so the open time grows with the files already there: the write test
+   measured 334 ms with about 830 files in one folder. In continuous recording the next file is
+   opened while audio arrives, and the logger buffers only about 0.27 s (mono) or 0.15 s (stereo)
+   at 48 kHz, so after about a week in the root folder every file change lost audio. Per day:
+   144 files in continuous recording (about 60 ms), 720 for a 60 s / 60 s duty cycle. The write
+   test uses the same folders.
+
 ## D. Setup page (`tools/logger-setup.html`)
 
 - SD Sleep setting: "microSD card during sleeps of 2 min or more": `Keep powered (default)` or

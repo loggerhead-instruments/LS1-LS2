@@ -145,7 +145,7 @@ volatile uint16_t delayDays = 0;
 unsigned long file_count;
 char filename[100];
 char dirname[20];
-int folderMonth;
+long folderDate;  // YYYYMMDD of the current folder
 
 // The internal RTC alarm wakes the logger. The DS3231 is the time reference only, so a
 // faulty DS3231 cannot stop the logger waking.
@@ -416,7 +416,7 @@ void setup() {
   mode = 0;
 
   // create first folder to hold data
-  folderMonth = -1;  //set to -1 so when first file made will create directory
+  folderDate = -1;  //set to -1 so when first file made will create directory
   checkSD();
 }
 
@@ -660,11 +660,13 @@ void FileInit()
 {
    t = getTeensy3Time(1); // this will also sync teensy clock used to wake up to DS3231
 
-   // use folders for duty cycle record because short files could exceed max files per directory
-   if (folderMonth != month(t) & (rec_int > 0)){
+   // A folder for each day. Creating a file reads every entry in its folder, so the open time
+   // grows with the files already there; in continuous recording a slow open loses audio.
+   long today = year(t) * 10000L + month(t) * 100 + day(t);
+   if (folderDate != today){
     if(printDiags) Serial.println("New Folder");
-    folderMonth = month(t);
-    sprintf(dirname, "/%04d-%02d", year(t), folderMonth);
+    folderDate = today;
+    sprintf(dirname, "/%04d-%02d-%02d", year(t), month(t), day(t));
 
     sd.mkdir(dirname);
     sd.chdir(dirname);
@@ -683,7 +685,7 @@ void FileInit()
    Serial.println(filename);
    if(!file.open(filename, O_WRITE | O_CREAT | O_EXCL)){
     // if can't open, try names from a count; restart only if those fail too
-    if(dirname[0]) sd.chdir(dirname);  // continuous recording uses the root folder
+    if(dirname[0]) sd.chdir(dirname);
     boolean opened = false;
     for(int tries = 0; (tries < 20) & !opened; tries++){
       file_count += 1;
@@ -903,7 +905,7 @@ boolean cardOn(){
       sdPowerCycle(0);
     }
     if(sd.begin(chipSelect[0])){
-      if(dirname[0]) sd.chdir(dirname);  // continuous recording uses the root folder
+      if(dirname[0]) sd.chdir(dirname);  // back to the day folder
       return true;
     }
   }
