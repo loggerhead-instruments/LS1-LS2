@@ -263,19 +263,8 @@ struct TIME_HEAD
 };
 
 void setup() {
-  // The codec and hydrophone enables have no pull-up or pull-down, so they float during a reset.
-  // Switch both off for 100 ms on every start (with the I2S clock pins low, so they cannot power
-  // the codec), then on. The card stays off until it is started.
   pinMode(SDPOW1, OUTPUT);
-  digitalWrite(SDPOW1, LOW);
-  pinMode(SGTL_EN, OUTPUT);
-  digitalWrite(SGTL_EN, LOW);
-  pinMode(hydroPowPin, OUTPUT);
-  digitalWrite(hydroPowPin, LOW);
-  i2sPinsLow();  // AudioInit() returns them to I2S
-  delay(100);
-  digitalWrite(SGTL_EN, HIGH);
-  digitalWrite(hydroPowPin, HIGH);
+  digitalWrite(SDPOW1, LOW);  // the card stays off until it is started
 
   watchdogStart();
   read_myID();
@@ -292,7 +281,18 @@ void setup() {
   sdPowSelect[0] = SDPOW1;
   
   Serial.begin(baud);
-  delay(500);
+  // The codec and hydrophone enables have no pull-up or pull-down, so they float during a reset.
+  // Switch both off for 250 ms on every start (with the I2S clock pins low, so they cannot power
+  // the codec), then on, and give the codec 250 ms before the display uses the I2C bus.
+  pinMode(SGTL_EN, OUTPUT);
+  digitalWrite(SGTL_EN, LOW);
+  pinMode(hydroPowPin, OUTPUT);
+  digitalWrite(hydroPowPin, LOW);
+  i2sPinsLow();  // AudioInit() returns them to I2S
+  delay(250);
+  digitalWrite(SGTL_EN, HIGH);
+  digitalWrite(hydroPowPin, HIGH);
+  delay(250);
   Serial.printf("Reset SRS0 %02X SRS1 %02X%s\n", RCM_SRS0, RCM_SRS1, resumeDeployment ? ", resuming the deployment" : "");
 
   pinMode(LEDGREEN, OUTPUT);
@@ -309,11 +309,6 @@ void setup() {
   pinMode(SELECT, INPUT_PULLUP);
   
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  //initialize display
-  if(RCM_SRS0 & 0x80){
-    // power-on: the display has no reset line and can miss the first set-up while its supply settles
-    delay(150);
-    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  }
   delay(140);
   cDisplay();
   display.println("Loggerhead");
