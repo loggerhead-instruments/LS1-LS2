@@ -1,5 +1,6 @@
 float mAmpRec = 50;  
 float mAmpSleep = 2.0; // measured 1.38 mA at 4 V with deep sleep (v4.40); rounded up to be conservative
+float mAmpSleepCardOff = 1.0; // SD Sleep set to Power off: measured 0.7 mA at 4 V (v4.50); rounded up
 byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
 
@@ -865,7 +866,10 @@ void calcDeployment(){
   float recDraw = mAmpRec;
   float recFraction = ((float) rec_dur * dielFraction) / (float) (rec_dur + rec_int);
   float sleepFraction = 1 - recFraction;
-  float avgCurrentDraw = (recDraw * recFraction) + (mAmpSleep * sleepFraction);
+  // the card is switched off only for sleeps of 2 min or more (diel nights are not counted)
+  boolean cardOffInSleep = sdSleep & (rec_int >= SD_SLEEP_SECONDS + wakeahead);
+  float sleepDraw = cardOffInSleep ? mAmpSleepCardOff : mAmpSleep;
+  float avgCurrentDraw = (recDraw * recFraction) + (sleepDraw * sleepFraction);
 
   powerSeconds = uint32_t (3600.0 * (nBatPacks * mAhPerBat / avgCurrentDraw));
 
