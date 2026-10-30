@@ -263,10 +263,6 @@ struct TIME_HEAD
 };
 
 void setup() {
-  pinMode(SDPOW1, OUTPUT);
-  digitalWrite(SDPOW1, LOW);  // the card stays off until it is started
-
-  watchdogStart();
   read_myID();
 
   // A software reset (resetFunc) or a watchdog reset during a deployment goes straight back
@@ -281,18 +277,7 @@ void setup() {
   sdPowSelect[0] = SDPOW1;
   
   Serial.begin(baud);
-  // The codec and hydrophone enables have no pull-up or pull-down, so they float during a reset.
-  // Switch both off for 250 ms on every start (with the I2S clock pins low, so they cannot power
-  // the codec), then on, and give the codec 250 ms before the display uses the I2C bus.
-  pinMode(SGTL_EN, OUTPUT);
-  digitalWrite(SGTL_EN, LOW);
-  pinMode(hydroPowPin, OUTPUT);
-  digitalWrite(hydroPowPin, LOW);
-  i2sPinsLow();  // AudioInit() returns them to I2S
-  delay(250);
-  digitalWrite(SGTL_EN, HIGH);
-  digitalWrite(hydroPowPin, HIGH);
-  delay(250);
+  delay(500);
   Serial.printf("Reset SRS0 %02X SRS1 %02X%s\n", RCM_SRS0, RCM_SRS1, resumeDeployment ? ", resuming the deployment" : "");
 
   pinMode(LEDGREEN, OUTPUT);
@@ -302,6 +287,14 @@ void setup() {
   pinMode(DS3231_INT_PIN, INPUT_PULLUP); // DS3231 INT, not used to wake; read for diagnostics
   pinMode(vSense, INPUT);
   analogReference(INTERNAL);
+  
+  pinMode(hydroPowPin, OUTPUT);
+  digitalWrite(hydroPowPin, HIGH);
+
+  pinMode(SDPOW1, OUTPUT);
+  pinMode(SGTL_EN, OUTPUT);
+  digitalWrite(SDPOW1, LOW); // start cardsswitched off in case of reset
+  digitalWrite(SGTL_EN, HIGH);
   
   //setup display and controls
   pinMode(UP, INPUT_PULLUP);
@@ -316,7 +309,20 @@ void setup() {
   display.print("Version ");
   display.println(codeVersion);
   display.display();
-  delay(1000); // leave splash up long enough to read the version
+  delay(500); // leave splash up long enough to read the version
+
+  // Power-cycle the codec and hydrophone on every start: their enables have no pull-up or
+  // pull-down, so they float during a reset. Done while the splash is up and nothing uses I2C
+  // (an unpowered codec holds the bus), with the I2S clock pins low so they cannot power it.
+  digitalWrite(SGTL_EN, LOW);
+  digitalWrite(hydroPowPin, LOW);
+  i2sPinsLow();  // AudioInit() returns them to I2S
+  delay(250);
+  digitalWrite(SGTL_EN, HIGH);
+  digitalWrite(hydroPowPin, HIGH);
+  delay(250);
+
+  watchdogStart();
 
   // Audio connections require memory, and the record queue
   // uses this memory to buffer incoming audio.
