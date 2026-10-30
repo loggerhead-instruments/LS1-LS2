@@ -174,7 +174,7 @@ uint32_t softMillis = 0;
 
 byte voltCutoff = 33;  // stop recording below this battery voltage, in tenths of a volt; 0 = off
 int lowVoltCount = 0;
-byte sdSleep = 0;      // 1: switch the SD card off for sleeps of 2 min or more
+byte sdSleep = 1;      // 1: switch the SD card off for sleeps of 2 min or more
 #define SD_SLEEP_SECONDS 120
 boolean cardIsOn = false;
 #define TIME_2026 1767225600  // 2026-01-01 00:00:00; a DS3231 reading earlier has lost its time

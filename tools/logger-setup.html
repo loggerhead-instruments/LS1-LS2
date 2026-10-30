@@ -232,7 +232,7 @@ const FIELDS = [
     options: [[0, 'Off']].concat(range(30, 34).map(v => [v, (v / 10).toFixed(1) + ' V'])),
     help: 'Stops recording after 3 files in a row below this voltage.' },
   { key: 'sd_sleep', label: 'microSD card during sleeps of 2 min or more', type: 'select',
-    options: [[0, 'Keep powered (default)'], [1, 'Power off (saves current; card restarts each wake)']],
+    options: [[0, 'Keep powered'], [1, 'Power off (default; saves current, card restarts each wake)']],
     help: 'Power off saves current with cards that draw a lot when idle.' },
 ];
 const KNOWN_KEYS = new Set(FIELDS.flatMap(f => f.keys || [f.key]));

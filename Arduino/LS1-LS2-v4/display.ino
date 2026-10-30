@@ -293,7 +293,7 @@ void manualSettings(){
     EEPROM.write(24, voltCutoff); //byte
   }
   if (sdSleep > 1) {
-    sdSleep = 0;  // default: keep the card powered
+    sdSleep = 1;  // default: power the card off
     EEPROM.write(EE_SD_SLEEP, sdSleep);
   }
   if (EEPROM.read(EE_SD_RESTARTS) == 255) EEPROM.write(EE_SD_RESTARTS, 0);     // never written

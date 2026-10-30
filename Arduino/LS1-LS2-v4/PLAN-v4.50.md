@@ -131,10 +131,11 @@ Recent bench and field results:
    That commit blamed VLLS losing pin states, but the logger uses LLS, which keeps them. The pins
    must be taken off SPI (`pinMode(pin, INPUT_DISABLE)`, as `stopForGood()` does) before the power
    is cut.
-2. **New menu setting "SD Sleep"**, default `Keep powered`; the other value is `Power off`. The
-   setting's screen shows "Sleeps 2 min or more". When set to `Power off`, the card is turned off
-   for sleeps of 2 minutes or more and started again during the 4 s wake-up margin. If it will not
-   start, the logger restarts and resumes as now. Help line: `ENTER:SD power down`.
+2. **New menu setting "SD Sleep"**, default `Power off` (was `Keep powered` until the overnight
+   battery test passed); the other value is `Keep powered`. The setting's screen shows "Sleeps
+   2 min or more". When set to `Power off`, the card is turned off for sleeps of 2 minutes or more
+   and started again during the 4 s wake-up margin. If it will not start, the logger restarts and
+   resumes as now. Help line: `ENTER:SD power down`.
 3. **Fix the `FileInit()` fallback** so one bad open does not force a restart; restart only if a
    fallback name also fails. No `chdir()` with an empty folder name.
 4. **Back off after repeated card failures:** after 5 failed restarts in a row, sleep 1 hour with
@@ -151,8 +152,8 @@ Recent bench and field results:
 
 ## D. Setup page (`tools/logger-setup.html`)
 
-- SD Sleep setting: "microSD card during sleeps of 2 min or more": `Keep powered (default)` or
-  `Power off (saves current; card restarts each wake)`.
+- SD Sleep setting: "microSD card during sleeps of 2 min or more": `Keep powered` or
+  `Power off (default; saves current, card restarts each wake)`.
 - Watchdog reset count, with Clear.
 - Clock-switch report with the time, with Clear.
 
