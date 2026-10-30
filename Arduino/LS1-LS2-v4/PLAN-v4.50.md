@@ -1,6 +1,6 @@
 # LS1/LS2 v4.50 plan: watchdog, clock and SD card robustness
 
-Status: plan agreed, not yet implemented. Applies to `Arduino/LS1-LS2-v4` and `tools/logger-setup.html`.
+Status: implemented in 4.50 (not yet compiled or bench tested); see "Implementation notes" at the end. Applies to `Arduino/LS1-LS2-v4` and `tools/logger-setup.html`.
 
 ## Why
 
@@ -182,6 +182,7 @@ Bump to **4.50**, with `sleepDiags = 0`.
 | 31 | Clock switch flag |
 | 32-35 | Time of the clock switch (seconds since 1970) |
 | 36 | Audio restart count (audio watchdog, stops at 254) |
+| 37 | Clock gap count: syncs with the DS3231 and internal RTC more than 10 s apart (stops at 254) |
 
 Existing: 0-21 settings, 24 voltage cutoff, 25 SD restarts, 26 low-battery stop, 27 card-full
 stop, 28 deployment running.
@@ -206,5 +207,31 @@ stop, 28 deployment running.
 - **Start-up power cycle:** on a scope, `SGTL_EN` and the hydrophone enable go low for 100 ms at
   every start (power-on, restart after a card failure, watchdog reset), and recording is normal after.
 - **Audio:** overnight duty-cycle run with no stall (on USB and on battery). Audio watchdog: a
-  temporary build that skips `i2sStart()` on one wake recovers by `AudioInit()` and records.
+  temporary build that skips `i2sStart()` on one wake recovers by `AudioInit()` and records. Verify audio records correctly.
 - **Coin cell:** fit a coin cell on bench boards before judging DS3231 stop-flag results.
+
+## Implementation notes (4.50)
+
+- **Watchdog:** `watchdogStart()`, `watchdogRefresh()`, `watchdogStop()` in the main sketch. LPO
+  clock, `WDOG_PRESC = 0` (the reset value divides by 5), WAITEN on, STOPEN off. Refreshed in
+  `loop()`, the menu loop, `updateVal()` (every setting screen), each card attempt, the delayed
+  start screen, `restartLogger()`, and before and after `sleepUntil()`. The `printDiags` wake
+  print in A is covered by the `sleepDiags` wake log.
+- **Restarts:** `resetFunc()` (card errors) counts EEPROM 25 and the card-failure counter, then
+  calls `restartLogger()`. The audio watchdog calls `restartLogger()` directly, so it does not
+  count as a card failure.
+- **Card-failure counter (C4):** system register file word 7 (0x4004101C) with a marker in the top
+  16 bits; reset by power-up. Cleared when a file opens. The hourly back-off applies only when
+  resuming a deployment; at the bench a dead card still restarts so it is seen.
+- **Card routines (C1):** `cardRelease()` (pins off SPI, CS low, power off), `cardOff()` (waits
+  for the card first), `cardOn()` (power, start with up to 4 power-cycle retries, back to the
+  folder). Used after the delayed start, by SD Sleep, `stopForGood()`, `restartLogger()` and
+  `sdPowerCycle()`. The power-up start in `manualSettings()` keeps its own loop, which also
+  checks the free-space count.
+- **Clock (B2):** the internal RTC is synced and checked at most every 5 s of DS3231 time, because
+  SdFat's file time stamps also sync; re-setting a stopped internal RTC more often would hide it.
+  The menu year starts at 2026 and the USB time command rejects earlier times, so setting the time
+  cannot trip the "before 2026" rule.
+- **`millis()` (B5):** corrected in `sleepUntil()` after every wake: by the internal RTC (seconds
+  and prescaler) after an alarm wake, by the calibrated LPO after an LPTMR wake. The RTC is not
+  used after an LPTMR wake, so a stopped internal RTC still shows as not counting.

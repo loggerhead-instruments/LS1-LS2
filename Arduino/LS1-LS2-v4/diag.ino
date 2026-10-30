@@ -4,10 +4,10 @@
 // lines printed right after a wake are lost. Each wake in sleepUntil() is stored here and the
 // whole log is printed at the next Record Start, when USB is back.
 //
-// No-audio report: if no audio reaches the card for 3 s after a recording starts, print the
-// I2S, DMA and clock registers every 10 s and show them on the display. A codec that is
-// powered down still gives zeros, because the Teensy generates the I2S clocks; no data at all
-// means the Teensy I2S receiver or its DMA has stopped.
+// No-audio report: when the audio watchdog (checkAudio() in the main sketch) finds no audio
+// for 3 s, print the I2S, DMA and clock registers, and show them on the display before the
+// first audio restart. A codec that is powered down still gives zeros, because the Teensy
+// generates the I2S clocks; no data at all means the Teensy I2S receiver or its DMA has stopped.
 
 #define WAKE_LOG_N 16
 uint32_t wakeLogRtc[WAKE_LOG_N];
@@ -47,33 +47,6 @@ void printWakeLog(){
       wakeLogDs[i][0], wakeLogDs[i][1], wakeLogDs[i][2]);
   }
   wakeLogCount = 0;
-}
-
-uint32_t lastAudioMillis;
-uint32_t lastStallReport;
-long lastBufCount;
-boolean audioStalled;
-
-void diagRecordStart(){
-  lastAudioMillis = millis();
-  lastBufCount = 0;
-  audioStalled = 0;
-}
-
-// Called from loop() in record mode
-void checkAudioFlow(){
-  if(buf_count != lastBufCount){
-    lastBufCount = buf_count;
-    lastAudioMillis = millis();
-    if(audioStalled) Serial.println("audio restarted");
-    audioStalled = 0;
-    return;
-  }
-  if(millis() - lastAudioMillis < 3000) return;
-  if(audioStalled && (millis() - lastStallReport < 10000)) return;
-  lastStallReport = millis();
-  reportAudioStall(!audioStalled);
-  audioStalled = 1;
 }
 
 void reportAudioStall(boolean showDisplay){

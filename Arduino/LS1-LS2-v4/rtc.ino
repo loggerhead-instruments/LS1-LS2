@@ -38,6 +38,7 @@ void setTime2(int thour,int tminute,int tsecond,int tday,int tmonth,int tyear)
   time_t newTime = makeTime(tm);
   if(internalRtcOK) Teensy3Clock.set(newTime);
   setSoftTime(newTime);
+  syncDs = syncRtc = newTime;  // both clocks start again from the time just set
 }
 
 void set_alarm(int thour, int tminute)
@@ -131,8 +132,6 @@ int readDSRegs(byte *reg, int count){
   return n;
 }
 
-// Bench diagnostics (sleepDiags): the wake source and the state of both clocks on USB serial
-
 // True if the DS3231 answers with a valid time and is counting
 boolean ds3231Running(){
   if(!readRTC()) return false;
@@ -208,13 +207,46 @@ time_t softNow(){
   return softTime;
 }
 
-// Switch away from the DS3231 for the rest of the deployment
+// Switch away from the DS3231 for the rest of the deployment. A switch during a deployment
+// is recorded with its time for the setup page (the first one, until cleared).
 void useBackupClock(){
   rtcFail = true;
   clockSource = internalRtcOK ? CLOCK_INTERNAL : CLOCK_LPTMR;
   disable_alarm();  // in case the DS3231 still answers, so it cannot hold INT low
   Serial.print("DS3231 failed, clock source ");
   Serial.println(clockSource);
+  if((EEPROM.read(EE_DEPLOYED) == 1) & (EEPROM.read(EE_CLOCK_SWITCH) != 1)){
+    EEPROM.write(EE_CLOCK_SWITCH, 1);
+    writeEEPROMlong(EE_CLOCK_SWITCH_TIME, internalRtcOK ? Teensy3Clock.get() : softNow());
+  }
+}
+
+// Called at each sync while the DS3231 is the clock. Both clocks must have moved on since the
+// last sync. If the DS3231 has and the internal RTC has not, the internal RTC has stopped: stop
+// using it, and sleeps wake on the LPTMR. If the two are over 10 s apart, count it; the DS3231
+// is still taken as right.
+void checkInternalRtc(time_t ds){
+  if(syncDs == 0) return;  // no sync yet
+  time_t rtc = Teensy3Clock.get();
+  if(((long) (ds - syncDs) >= 5) && (rtc == syncRtc)){
+    internalRtcOK = false;
+    Serial.println("Internal RTC stopped");
+    return;
+  }
+  if(abs((long) (rtc - ds)) > 10){
+    eeCount(EE_CLOCK_GAPS);
+    Serial.printf("Internal RTC %ld s from the DS3231\n", (long) (rtc - ds));
+  }
+}
+
+// Internal RTC time in ms (wraps), to measure how long a sleep lasted
+uint32_t rtcMillis(){
+  uint32_t s, p;
+  do{
+    s = RTC_TSR;
+    p = RTC_TPR;
+  } while(s != RTC_TSR);
+  return s * 1000 + ((p & 0x7FFF) * 1000) / 32768;
 }
 
 // Check the clocks at power-up and pick the best one that works
@@ -223,8 +255,24 @@ void clockInit(){
   calibrateLPO();
 
   boolean dsOK = readRTC();
+
+  // Restarted during a deployment with the DS3231 stopped (stop flag set) or its time lost:
+  // the internal RTC kept counting through the restart, so use it for the rest of the
+  // deployment, and put its time back in the DS3231.
+  if(dsOK & resumeDeployment & internalRtcOK){
+    if((rtcStatus() & 0x80) || (t < TIME_2026)){
+      dsOscStopped = true;
+      reset_alarm();  // clears the stop flag
+      time_t rtcNow = Teensy3Clock.get();
+      setTime2(hour(rtcNow), minute(rtcNow), second(rtcNow), day(rtcNow), month(rtcNow), year(rtcNow) - 2000U);
+      useBackupClock();
+      t = Teensy3Clock.get();
+      return;
+    }
+  }
+
   if(dsOK){
-    if (t < 1678737100) setTime2(16, 0, 0, 1, 11, 2026 - 2000U); // DEFAULT_TIME
+    if (t < TIME_2026) setTime2(16, 0, 0, 1, 11, 2026 - 2000U); // DEFAULT_TIME
     // Check DS3231 oscillator status
     if(rtcStatus() & 0x80){ // OSF bit set — oscillator stopped
       dsOscStopped = true;  // time may be wrong until it is set
@@ -264,7 +312,7 @@ void clockInit(){
   useBackupClock();
   if(internalRtcOK) t = Teensy3Clock.get();
   else{
-    if(softTime < 1678737100) setSoftTime(DEFAULT_TIME);
+    if(softTime < TIME_2026) setSoftTime(DEFAULT_TIME);
     t = softNow();
   }
   cDisplay();
@@ -283,7 +331,10 @@ void clockInit(){
 // the logger waking. The LPTMR is a backup 2 s after the alarm. If the internal RTC is not
 // running, the LPTMR is the alarm, in steps of up to a minute.
 // sgtlOff: switch the SGTL5000 off while asleep (I2C needs it on).
+// The watchdog is refreshed before and after the whole sleep, not between wakes: it is stopped
+// while asleep, so only a sleep that keeps waking at once can run it out.
 void sleepUntil(time_t wakeTime, boolean sgtlOff){
+  watchdogRefresh();
   if(!internalRtcOK) calibrateLPO();
   while(1){
     long secs = wakeTime - getTeensy3Time(1);  // also syncs the internal RTC to the DS3231
@@ -296,6 +347,7 @@ void sleepUntil(time_t wakeTime, boolean sgtlOff){
     lptmr.setTimer(ticks);
 
     if(sgtlOff) digitalWrite(SGTL_EN, LOW);
+    uint32_t rtcBefore = rtcMillis();
     int who;
     if(internalRtcOK){
       rtcAlarm.setRtcTimer(secs / 3600, (secs % 3600) / 60, secs % 60);
@@ -305,8 +357,16 @@ void sleepUntil(time_t wakeTime, boolean sgtlOff){
     /// ... sleeping ...
     if(sgtlOff) digitalWrite(SGTL_EN, HIGH); // power on so I2C works
 
-    // Snooze adds the LPTMR ticks to millis() as if they were ms; correct to real time
-    if(who == LPTMR_WAKE) softMillis += ticks - (uint32_t) (ticks * 1000.0 / lpoHz);
+    // Snooze adds the whole LPTMR period to millis() on every wake, counting its ticks as ms,
+    // even when the RTC alarm woke the logger first. Set millis() to the time that passed: by the
+    // internal RTC after an alarm wake (the alarm shows it is counting), otherwise by the LPO.
+    uint32_t sleptMs;
+    if(internalRtcOK & (who != LPTMR_WAKE)) sleptMs = rtcMillis() - rtcBefore;
+    else sleptMs = (uint32_t) (ticks * 1000.0 / lpoHz);
+    noInterrupts();
+    systick_millis_count += sleptMs - ticks;  // unsigned wrap adds a negative difference
+    interrupts();
     if(sleepDiags) wakeLogAdd(who, secs);  // printed at Record Start, once USB is back
   }
+  watchdogRefresh();
 }

@@ -231,6 +231,9 @@ const FIELDS = [
   { key: 'cutoff', label: 'Low battery cutoff', type: 'select',
     options: [[0, 'Off']].concat(range(30, 34).map(v => [v, (v / 10).toFixed(1) + ' V'])),
     help: 'Stops recording after 3 files in a row below this voltage.' },
+  { key: 'sd_sleep', label: 'microSD card during sleeps of 2 min or more', type: 'select',
+    options: [[0, 'Keep powered (default)'], [1, 'Power off (saves current; card restarts each wake)']],
+    help: 'Power off saves current with cards that draw a lot when idle.' },
 ];
 const KNOWN_KEYS = new Set(FIELDS.flatMap(f => f.keys || [f.key]));
 
@@ -480,6 +483,29 @@ function findIssues() {
       list.push(issue('warn', 'Recording stopped with the card full',
         'A previous deployment recorded all the files that fit on the card. Offload the data and format the card before reuse.',
         { label: 'Clear', cmd: 'C\n' }));
+    }
+    if (status.clk_switch === '1') {
+      const when = parseInt(status.clk_switch_time || '0', 10);
+      list.push(issue('err', 'DS3231 failed during a deployment' + (when > 0 ? ' at ' + fmt(when * 1000) + ' UTC' : ''),
+        'The logger switched to its internal clock from then on, so later file times are less accurate. Replace the DS3231.',
+        { label: 'Clear', cmd: 'C\n' }));
+    }
+    const count = k => parseInt(status[k] || '0', 10);
+    const times = n => n + (n === 1 ? ' time' : ' times');
+    if (count('wdog_resets') > 0) {
+      list.push(issue('warn', 'Restarted ' + times(count('wdog_resets')) + ' by the watchdog',
+        'The firmware stopped responding and was restarted; a deployment resumes recording after each one. Tell Loggerhead if this keeps happening.',
+        { label: 'Clear count', cmd: 'C\n' }));
+    }
+    if (count('audio_restarts') > 0) {
+      list.push(issue('warn', 'Audio restarted ' + times(count('audio_restarts')),
+        'A recording got no audio for 3 s and the audio was restarted. Tell Loggerhead if this keeps happening.',
+        { label: 'Clear count', cmd: 'C\n' }));
+    }
+    if (count('clock_gaps') > 0) {
+      list.push(issue('warn', 'Clocks were more than 10 s apart ' + times(count('clock_gaps')),
+        'The DS3231 and the internal clock disagreed at a check; the DS3231 time was kept.',
+        { label: 'Clear count', cmd: 'C\n' }));
     }
   }
   return list;

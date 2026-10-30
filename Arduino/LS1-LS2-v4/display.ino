@@ -44,7 +44,7 @@ uint32_t powerSeconds;       // deployment length the batteries allow
 float totalSecondsMemory;    // deployment length the card allows
 
 int curMenuItem = 0;
-volatile int maxMenuItem = 11;
+volatile int maxMenuItem = 12;
 char *menuItem[] = {"Start",
                      "Record",
                      "Sleep",
@@ -56,6 +56,7 @@ char *menuItem[] = {"Start",
                      "Delay",
                      "Mode",
                      "Cutoff",
+                     "SD Sleep",
                      "Diel"
                      };
 
@@ -70,6 +71,7 @@ char *helpText[] = {"ENTER:Start RecordingUP/DN:scroll menu",
                     "ENTER:Set Delay Days\nUP/DN:scroll menu",
                     "ENTER:Set Mode\nUP/DN:scroll menu",
                     "ENTER:Set Low V Stop\nUP/DN:scroll menu",
+                    "ENTER:SD power down\nUP/DN:scroll menu",
                     "ENTER:Set Diel Time\nUP/DN:scroll menu"
                     };
 
@@ -101,7 +103,8 @@ void printZero(int val){
 #define setDelay 8
 #define setMode 9
 #define setCutoff 10
-#define setDielTime 11
+#define setSdSleep 11
+#define setDielTime 12  // last: only shown in diel mode
 
 void manualSettings(){
   boolean startRec = 0, startUp, startDown;
@@ -117,10 +120,35 @@ void manualSettings(){
     display.setCursor(0, 16);
     display.println("Card Free/Total MB");
 
+    // After 5 card failures in a row during a deployment, rest for an hour with the card,
+    // codec and hydrophone off before trying again, for as long as the batteries last
+    if(resumeDeployment & (cardFailCount() >= 5)){
+      Serial.printf("Card failed %d times in a row: retry in 1 hour\n", cardFailCount());
+      display.println("Card failed");
+      display.println("Retry in 1 hour");
+      display.display();
+      delay(5000);
+      display.ssd1306_command(SSD1306_DISPLAYOFF);
+      digitalWrite(hydroPowPin, LOW);
+      audioSleep();
+      i2sPinsLow();
+      cardOff();
+      sleepUntil(getTeensy3Time(1) + 3600, 1);
+      digitalWrite(hydroPowPin, HIGH);
+      AudioInit(isf);  // restores the I2S pins; setup() sets up the audio again after the menu
+      display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+      cDisplay();
+      display.print("LS Init");
+      display.setTextSize(1);
+      display.setCursor(0, 16);
+      display.println("Card Free/Total MB");
+    }
+
     // power cards on
     for (int n=0; n<1; n++){
       digitalWrite(sdPowSelect[n], HIGH);
     }
+    cardIsOn = true;
     delay(1000);
     
     // Initialize the SD card
@@ -142,6 +170,7 @@ void manualSettings(){
       int32_t volFree = 0;
       boolean cardBegun = 0;
       for(int attempt = 0; attempt < 5; attempt++){
+        watchdogRefresh();
         if(attempt > 0){
           Serial.print("Card retry ");
           Serial.println(attempt);
@@ -262,9 +291,17 @@ void manualSettings(){
     voltCutoff = 33;  // default 3.3 V
     EEPROM.write(24, voltCutoff); //byte
   }
+  if (sdSleep > 1) {
+    sdSleep = 0;  // default: keep the card powered
+    EEPROM.write(EE_SD_SLEEP, sdSleep);
+  }
   if (EEPROM.read(EE_SD_RESTARTS) == 255) EEPROM.write(EE_SD_RESTARTS, 0);     // never written
   if (EEPROM.read(EE_LOW_BATT_STOP) == 255) EEPROM.write(EE_LOW_BATT_STOP, 0);
   if (EEPROM.read(EE_CARD_FULL_STOP) == 255) EEPROM.write(EE_CARD_FULL_STOP, 0);
+  if (EEPROM.read(EE_WDOG_RESETS) == 255) EEPROM.write(EE_WDOG_RESETS, 0);
+  if (EEPROM.read(EE_CLOCK_SWITCH) == 255) EEPROM.write(EE_CLOCK_SWITCH, 0);
+  if (EEPROM.read(EE_AUDIO_RESTARTS) == 255) EEPROM.write(EE_AUDIO_RESTARTS, 0);
+  if (EEPROM.read(EE_CLOCK_GAPS) == 255) EEPROM.write(EE_CLOCK_GAPS, 0);
 
   // After a restart during a deployment, skip the menu and go back to recording
   if(resumeDeployment){
@@ -280,6 +317,7 @@ void manualSettings(){
   // Main Menu Loop
    while(startRec==0){
     static int newYear, newMonth, newDay, newHour, newMinute, newSecond, oldYear, oldMonth, oldDay, oldHour, oldMinute, oldSecond;
+    watchdogRefresh();
     checkSerialCommands();  // settings and time from USB (tools/logger-setup.html)
     t = getTeensy3Time(0);
     if (t - autoStartTime > 600) startRec = 1; //autostart if no activity for 10 minutes
@@ -287,10 +325,10 @@ void manualSettings(){
     // Check for button press
     boolean selectVal = digitalRead(UP);
     if(recMode==MODE_DIEL){
-      maxMenuItem = 12;
+      maxMenuItem = 13;
     }
     else{
-      maxMenuItem = 11;
+      maxMenuItem = 12;
     }
     if(selectVal==0){
       while(digitalRead(UP)==0){
@@ -403,7 +441,7 @@ void manualSettings(){
         case setDateTime:
           while(digitalRead(SELECT)==1){
             oldYear = year(t);
-            newYear = updateVal(oldYear,2000, 2100);
+            newYear = updateVal(oldYear, 2026, 2100);  // a DS3231 reading before 2026 counts as failed
             if(oldYear!=newYear){
 //              Serial.print("Old year "); Serial.println(oldYear);
 //              Serial.print("New year "); Serial.println(newYear);
@@ -591,6 +629,25 @@ void manualSettings(){
           curMenuItem = setStart;
           break;
 
+        case setSdSleep:
+          while(digitalRead(SELECT)==1){
+            sdSleep = updateVal(sdSleep, 0, 1);
+            cDisplay();
+            display.println("SD Sleep");
+            display.setTextSize(1);
+            display.setCursor(0, 16);
+            display.println(sdSleep ? "Power off" : "Keep powered");
+            display.setCursor(0, 26);
+            display.print("Sleeps 2 min or more");
+            displaySettings();
+            displayVoltage();
+            display.display();
+            delay(2);
+          }
+          while(digitalRead(SELECT)==0); // wait to let go
+          curMenuItem = setStart;
+          break;
+
         case setDielTime:
           while(digitalRead(SELECT)==1){
             startHour = updateVal(startHour, 0, 23);
@@ -680,6 +737,7 @@ void setTeensyTime(int hr, int mn, int sc, int dy, int mh, int yr){
 }
   
 int updateVal(long curVal, long minVal, long maxVal){
+  watchdogRefresh();  // every setting screen loops here
   boolean upVal = digitalRead(UP);
   boolean downVal = digitalRead(DOWN);
   static int heldDown = 0;
@@ -877,6 +935,7 @@ void readEEPROM(){
   NCHAN = EEPROM.read(16);
   delayDays = readEEPROMlong(18);
   voltCutoff = EEPROM.read(24);
+  sdSleep = EEPROM.read(EE_SD_SLEEP);
 }
 
 union {
@@ -914,6 +973,7 @@ void writeEEPROM(){
   EEPROM.write(16, NCHAN); //byte
   writeEEPROMlong(18, delayDays); //long
   EEPROM.write(24, voltCutoff); //byte
+  EEPROM.write(EE_SD_SLEEP, sdSleep); //byte
 }
 
 void displayMenu(){

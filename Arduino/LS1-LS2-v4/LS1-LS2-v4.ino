@@ -17,9 +17,9 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "4.42";
+char codeVersion[5] = "4.50";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
-static boolean sleepDiags = 1;  // 1: bench diagnostics (diag.ino): wake log and no-audio report on USB serial; 0 for deployment
+static boolean sleepDiags = 0;  // 1: bench diagnostics (diag.ino): wake log and no-audio report on USB serial; 0 for deployment
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
 int wakeahead = 4;  //wake from snooze to give hydrophone to power up
@@ -174,13 +174,23 @@ uint32_t softMillis = 0;
 
 byte voltCutoff = 33;  // stop recording below this battery voltage, in tenths of a volt; 0 = off
 int lowVoltCount = 0;
+byte sdSleep = 0;      // 1: switch the SD card off for sleeps of 2 min or more
+#define SD_SLEEP_SECONDS 120
+boolean cardIsOn = false;
+#define TIME_2026 1767225600  // 2026-01-01 00:00:00; a DS3231 reading earlier has lost its time
 
 // EEPROM bytes read by the setup page (tools/logger-setup.html); cleared from the page
 #define EE_SD_RESTARTS 25    // count of resetFunc() restarts
 #define EE_LOW_BATT_STOP 26  // 1 if recording stopped on low battery
 #define EE_CARD_FULL_STOP 27 // 1 if recording stopped with the card full
 #define EE_DEPLOYED 28       // 1 while a deployment is running; cleared at power-up
-boolean resumeDeployment = false;  // restarted by resetFunc() during a deployment
+#define EE_SD_SLEEP 29       // SD Sleep setting
+#define EE_WDOG_RESETS 30    // count of watchdog resets
+#define EE_CLOCK_SWITCH 31   // 1 if the DS3231 failed during a deployment
+#define EE_CLOCK_SWITCH_TIME 32  // 4 bytes: when it failed (seconds since 1970)
+#define EE_AUDIO_RESTARTS 36 // count of audio restarts by the audio watchdog
+#define EE_CLOCK_GAPS 37     // count of syncs where the DS3231 and internal RTC were over 10 s apart
+boolean resumeDeployment = false;  // restarted by resetFunc() or the watchdog during a deployment
 
 // SD_FAT_TYPE = 0 for SdFat/File as defined in SdFatConfig.h,
 // 1 for FAT16/FAT32, 2 for exFAT, 3 for FAT16/FAT32 and exFAT.
@@ -253,13 +263,29 @@ struct TIME_HEAD
 };
 
 void setup() {
+  // The codec and hydrophone enables have no pull-up or pull-down, so they float during a reset.
+  // Switch both off for 100 ms on every start (with the I2S clock pins low, so they cannot power
+  // the codec), then on. The card stays off until it is started.
+  pinMode(SDPOW1, OUTPUT);
+  digitalWrite(SDPOW1, LOW);
+  pinMode(SGTL_EN, OUTPUT);
+  digitalWrite(SGTL_EN, LOW);
+  pinMode(hydroPowPin, OUTPUT);
+  digitalWrite(hydroPowPin, LOW);
+  i2sPinsLow();  // AudioInit() returns them to I2S
+  delay(100);
+  digitalWrite(SGTL_EN, HIGH);
+  digitalWrite(hydroPowPin, HIGH);
+
+  watchdogStart();
   read_myID();
 
-  // A software reset (resetFunc) during a deployment goes straight back to recording,
-  // without the menu wait or delay days. Power-up, low voltage or any other reset
-  // starts fresh with the menu.
-  boolean softwareReset = (RCM_SRS1 & 0x04) && !(RCM_SRS0 & 0x82);  // SW set; POR and LVD clear
-  resumeDeployment = softwareReset & (EEPROM.read(EE_DEPLOYED) == 1);
+  // A software reset (resetFunc) or a watchdog reset during a deployment goes straight back
+  // to recording, without the menu wait or delay days. Power-up, low voltage or any other
+  // reset starts fresh with the menu.
+  boolean restarted = ((RCM_SRS1 & 0x04) || (RCM_SRS0 & 0x20)) && !(RCM_SRS0 & 0x82);  // SW or WDOG; not POR or LVD
+  if(RCM_SRS0 & 0x20) eeCount(EE_WDOG_RESETS);
+  resumeDeployment = restarted & (EEPROM.read(EE_DEPLOYED) == 1);
   if(!resumeDeployment & (EEPROM.read(EE_DEPLOYED) != 0)) EEPROM.write(EE_DEPLOYED, 0);
 
   chipSelect[0] = CS1;
@@ -267,6 +293,7 @@ void setup() {
   
   Serial.begin(baud);
   delay(500);
+  Serial.printf("Reset SRS0 %02X SRS1 %02X%s\n", RCM_SRS0, RCM_SRS1, resumeDeployment ? ", resuming the deployment" : "");
 
   pinMode(LEDGREEN, OUTPUT);
   digitalWrite(LEDGREEN, HIGH);
@@ -276,20 +303,17 @@ void setup() {
   pinMode(vSense, INPUT);
   analogReference(INTERNAL);
   
-  pinMode(hydroPowPin, OUTPUT);
-  digitalWrite(hydroPowPin, HIGH);
-
-  pinMode(SDPOW1, OUTPUT);
-  pinMode(SGTL_EN, OUTPUT);
-  digitalWrite(SDPOW1, LOW); // start cardsswitched off in case of reset
-  digitalWrite(SGTL_EN, HIGH);
-  
   //setup display and controls
   pinMode(UP, INPUT_PULLUP);
   pinMode(DOWN, INPUT_PULLUP);
   pinMode(SELECT, INPUT_PULLUP);
   
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  //initialize display
+  if(RCM_SRS0 & 0x80){
+    // power-on: the display has no reset line and can miss the first set-up while its supply settles
+    delay(150);
+    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  }
   delay(140);
   cDisplay();
   display.println("Loggerhead");
@@ -308,6 +332,7 @@ void setup() {
 //WMXZ  audioIntervalSec = 256.0 / audio_srate; //buffer interval in seconds
 
   clockInit();  // check the DS3231 and fall back to the internal RTC if it has failed
+  watchdogRefresh();
 
   AudioInit(isf); // load current gain setting
   manualSettings();
@@ -334,13 +359,14 @@ void setup() {
     digitalWrite(hydroPowPin, LOW);
     audioSleep();
     i2sPinsLow();  // the codec power is cut in each sleep; AudioInit() below restores the pins
-    digitalWrite(SDPOW1, LOW);
+    cardOff();
     
     // sleep walk (~3.7 mA current)
     long time_to_first_rec = startTime - t;
     Serial.print("Time to first record ");
     Serial.println(time_to_first_rec);
     for(int x = 0; x<30; x++){
+      watchdogRefresh();
       cDisplay();
       display.println("Sleep");
       t = getTeensy3Time(1);
@@ -363,14 +389,8 @@ void setup() {
       time_to_first_rec = startTime - t;
     }
     digitalWrite(hydroPowPin, HIGH);
-    digitalWrite(SDPOW1, HIGH);
     digitalWrite(SGTL_EN, HIGH);
-    delay(1000);
-    // Initialize the SD card
-    SPI.setMOSI(7);
-    SPI.setSCK(14);
-    SPI.setMISO(12);
-    sd.begin(chipSelect[0]);
+    if(!cardOn()) resetFunc();  // the restart resumes the deployment without the delay
     AudioInit(isf);
   }
 
@@ -407,6 +427,8 @@ void setup() {
 int recLoopCount;  //for debugging when does not start record
   
 void loop() {
+  watchdogRefresh();
+
   // Standby mode
   if(mode == 0)
   {
@@ -419,6 +441,10 @@ void loop() {
       display.print(currentCard + 1);
       display.print(" ");
       display.print(filesPerCard[currentCard]);
+      if(clockSource != CLOCK_DS3231){  // the DS3231 has failed
+        display.setCursor(86, 18);
+        display.print(clockSource == CLOCK_INTERNAL ? "Clk:int" : "Clk:LPO");
+      }
       displayClock(startTime, 40);
       displayClock(t, BOTTOM);
       display.display();
@@ -469,7 +495,7 @@ void loop() {
   // Record mode
   if (mode == 1) {
     continueRecording();  // download data  
-    if(sleepDiags) checkAudioFlow();
+    checkAudio();
 
     if(digitalRead(UP)==0 & digitalRead(DOWN)==0){
       // stop recording
@@ -490,6 +516,7 @@ void loop() {
       display.println("Safe to turn off");
       display.display();
       EEPROM.write(EE_DEPLOYED, 0);  // deployment stopped by hand
+      watchdogStop();  // stays stopped until the power is cycled
       while(1);
     }
     
@@ -514,9 +541,11 @@ void loop() {
 
         if(sleepSeconds >= 10){
             time_t wakeTime = getTeensy3Time(0) + sleepSeconds;
+            boolean cardSleep = sdSleep & (sleepSeconds >= SD_SLEEP_SECONDS);  // SD Sleep set to Power off
 
             digitalWrite(hydroPowPin, LOW); //hydrophone off
             audioSleep();  // codec down, then I2S stopped; AudioInit() restarts the I2S, then the codec
+            if(cardSleep) cardOff();
 
             if(printDiags){
               Serial.print("Sleep seconds: ");
@@ -529,6 +558,7 @@ void loop() {
 
             // Waking up
             digitalWrite(hydroPowPin, HIGH); // hydrophone on
+            if(cardSleep && !cardOn()) resetFunc();  // card will not start: restart and resume
             delay(300);  // give time for Serial to reconnect to USB
             AudioInit(isf);
          }
@@ -547,7 +577,7 @@ void startRecording() {
   buf_count = 0;
   queue1.begin();
   if(NCHAN==2) queue2.begin();
-  if(sleepDiags) diagRecordStart();
+  audioWatchStart();
   if (printDiags)  Serial.println("Queue Begin");
 }
 
@@ -651,18 +681,20 @@ void FileInit()
    // open file 
    sprintf(filename,"%04d%02d%02dT%02d%02d%02d_%lu%lu_%2.1fdB_%2.1fV_ver%s.wav", year(t), month(t), day(t), hour(t), minute(t), second(t), myID[0], myID[1], gainDb, voltage, codeVersion);  //filename is DDHHMMSS
    Serial.println(filename);
-   while (!file.open(filename, O_WRITE | O_CREAT | O_EXCL)){
-    file_count += 1;
-    sprintf(filename,"F%06d.wav",file_count); //if can't open just use count
-    sd.chdir(dirname);
-    file.open(filename, O_WRITE | O_CREAT | O_EXCL);
-    Serial.println(filename);
-    delay(10);
-    if(file_count>20) {
-      resetFunc();
-      delay(1000);
+   if(!file.open(filename, O_WRITE | O_CREAT | O_EXCL)){
+    // if can't open, try names from a count; restart only if those fail too
+    if(dirname[0]) sd.chdir(dirname);  // continuous recording uses the root folder
+    boolean opened = false;
+    for(int tries = 0; (tries < 20) & !opened; tries++){
+      file_count += 1;
+      sprintf(filename,"F%06lu.wav",file_count);
+      Serial.println(filename);
+      opened = file.open(filename, O_WRITE | O_CREAT | O_EXCL);
+      if(!opened) delay(10);
     }
+    if(!opened) resetFunc();
    }
+   setCardFailCount(0);  // the card works again
 
     //intialize stereo .wav file header
     sprintf(wav_hdr.rId,"RIFF");
@@ -731,6 +763,7 @@ int dsReadFails = 0;
 time_t lastDsTime = 0, lastRtcTime = 0;
 uint32_t lastDsChange = 0, lastRtcChange = 0;
 time_t lastDsChangeRtc = 0;  // internal RTC time when the DS3231 reading last changed
+time_t syncDs = 0, syncRtc = 0;  // both clocks at the last sync, to check that each has moved on
 
 // True while a clock keeps counting; false once its reading has not changed for 5 s
 boolean clockCounting(time_t now, time_t *last, uint32_t *lastChange){
@@ -742,9 +775,10 @@ boolean clockCounting(time_t now, time_t *last, uint32_t *lastChange){
 }
 
 // Returns the time from the best working clock and switches to a backup clock
-// when the DS3231 stops answering (3 failed reads in a row) or stops counting.
+// when the DS3231 stops answering (3 failed reads in a row), stops counting or loses its time.
 // The DS3231 counts as stuck when its time has not changed for 5 s by millis() (awake)
-// or by the internal RTC, which also counts during sleep.
+// or by the internal RTC, which also counts during sleep. While it counts and reads 2026 or
+// later it is the reference: the internal RTC is synced to it and is not used to judge it.
 time_t getTeensy3Time(boolean syncTeensy)
 {
   if(clockSource == CLOCK_DS3231){
@@ -758,15 +792,22 @@ time_t getTeensy3Time(boolean syncTeensy)
       }
       boolean stuck = !changed && ((millis() - lastDsChange >= 5000) ||
                                    (internalRtcOK && (long) (Teensy3Clock.get() - lastDsChangeRtc) >= 5));
-      if(!stuck){
+      boolean lostTime = (t < TIME_2026);  // e.g. reset to 2000-01-01; its time must not be copied
+      if(!stuck & !lostTime){
         setSoftTime(t);
-        if(syncTeensy){
+        // Sync the internal RTC at most every 5 s of DS3231 time, so a stopped internal RTC
+        // is not set forward between checks (file time stamps also sync)
+        long sinceSync = (long) (t - syncDs);
+        if(syncTeensy & ((syncDs == 0) | (sinceSync >= 5) | (sinceSync < 0))){
+          if(internalRtcOK) checkInternalRtc(t);
           setTeensyTime(hour(t),minute(t),second(t),day(t),month(t),year(t)); // sync from DS3231 to Teensy time
           if(changed) lastDsChangeRtc = Teensy3Clock.get();  // measure from the synced time
+          syncDs = t;
+          syncRtc = Teensy3Clock.get();
         }
         return t;
       }
-      useBackupClock();  // DS3231 answers but its time is stuck
+      useBackupClock();  // DS3231 answers but its time is stuck or lost
     }
     else if(++dsReadFails >= 3) useBackupClock();
   }
@@ -785,27 +826,22 @@ time_t getTeensy3Time(boolean syncTeensy)
   return t;
 }
 
+// Restart after an SD card error. Counted for the setup page, and in a row for the back-off
+// in manualSettings(): after 5 failed restarts the logger waits an hour with the card off.
 void resetFunc(void){
-  byte sdRestarts = EEPROM.read(EE_SD_RESTARTS);
-  if(sdRestarts < 254) EEPROM.write(EE_SD_RESTARTS, sdRestarts + 1);
+  eeCount(EE_SD_RESTARTS);
+  setCardFailCount(cardFailCount() + 1);
+  restartLogger();
+}
+
+// Close the file, cycle the card's power and restart the processor. During a deployment
+// the restart resumes recording (see setup()).
+void restartLogger(){
+  watchdogRefresh();
   if(mode == 1) file.close();  // close file if open
-  // let the card finish any operation in progress before its power is cut
-  if(sd.card()){
-    uint32_t busyStart = millis();
-    while(sd.card()->isBusy() && (millis() - busyStart < 2000)) delay(10);
-  }
-  // MISO, MOSI, SCLK LOW
-  digitalWrite(7, LOW);
-  digitalWrite(12, LOW);
-  digitalWrite(14, LOW);
-  pinMode(7, INPUT_DISABLE);
-  pinMode(12, INPUT_DISABLE);
-  pinMode(14, INPUT_DISABLE);
-  
+  cardOff();
   //cycle power on SD cards (in case there are cards in other slots)
   for(int n = 0; n<1; n++){
-    digitalWrite(sdPowSelect[n], LOW);
-    digitalWrite(chipSelect[n], LOW);
     pinMode(chipSelect[n], INPUT_DISABLE);
   }
   delay(2000);
@@ -820,18 +856,155 @@ void resetFunc(void){
   CPU_RESTART
 }
 
-// Switch the card off and on again. The SPI pins are released and CS held low
-// while it is off so nothing powers the card through them.
+// Switch the card off and on again
 void sdPowerCycle(int n){
+  cardRelease(n);
+  delay(2000);
+  digitalWrite(sdPowSelect[n], HIGH);
+  cardIsOn = true;
+  delay(1000);  // sd.begin() reconnects the SPI pins
+}
+
+// Take the SPI pins off the card, hold CS low and cut its power. Pins left on SPI (or only
+// written low while still on SPI) keep powering the card through its protection diodes.
+void cardRelease(int n){
   pinMode(7, INPUT_DISABLE);   // MOSI
   pinMode(12, INPUT_DISABLE);  // MISO
   pinMode(14, INPUT_DISABLE);  // SCK
   pinMode(chipSelect[n], OUTPUT);
   digitalWrite(chipSelect[n], LOW);
   digitalWrite(sdPowSelect[n], LOW);
-  delay(2000);
-  digitalWrite(sdPowSelect[n], HIGH);
-  delay(1000);  // sd.begin() reconnects the SPI pins
+  cardIsOn = false;
+}
+
+// Let the card finish any operation in progress, then switch it off
+void cardOff(){
+  if(cardIsOn && sd.card()){
+    uint32_t busyStart = millis();
+    while(sd.card()->isBusy() && (millis() - busyStart < 2000)) delay(10);
+  }
+  cardRelease(0);
+}
+
+// Power the card and start it, with up to 4 power-cycle retries, then go back to the
+// current folder. Returns false if it will not start.
+boolean cardOn(){
+  digitalWrite(sdPowSelect[0], HIGH);
+  cardIsOn = true;
+  delay(1000);
+  SPI.setMOSI(7);
+  SPI.setSCK(14);
+  SPI.setMISO(12);
+  for(int attempt = 0; attempt < 5; attempt++){
+    watchdogRefresh();
+    if(attempt > 0){
+      Serial.print("Card retry ");
+      Serial.println(attempt);
+      sdPowerCycle(0);
+    }
+    if(sd.begin(chipSelect[0])){
+      if(dirname[0]) sd.chdir(dirname);  // continuous recording uses the root folder
+      return true;
+    }
+  }
+  return false;
+}
+
+// Card failures in a row, kept in the system register file: it survives restarts but not a
+// power-up, and needs no EEPROM writes. A marker in the top half shows it has been set.
+#define RFSYS_REG7 (*(volatile uint32_t *)0x4004101C)
+#define CARD_FAIL_MARK 0x4C530000
+int cardFailCount(){
+#ifdef SIM_SCGC5_REGFILE
+  SIM_SCGC5 |= SIM_SCGC5_REGFILE;
+#endif
+  uint32_t v = RFSYS_REG7;
+  return ((v & 0xFFFF0000) == CARD_FAIL_MARK) ? (v & 0xFFFF) : 0;
+}
+
+void setCardFailCount(int n){
+#ifdef SIM_SCGC5_REGFILE
+  SIM_SCGC5 |= SIM_SCGC5_REGFILE;
+#endif
+  if(n > 0xFFFF) n = 0xFFFF;
+  RFSYS_REG7 = CARD_FAIL_MARK | n;
+}
+
+// Add one to an EEPROM event count shown on the setup page (stops at 254; 255 = never written)
+void eeCount(int addr){
+  byte n = EEPROM.read(addr);
+  if(n == 255) n = 0;
+  if(n < 254) EEPROM.write(addr, n + 1);
+}
+
+// Hardware watchdog: restarts the processor if loop(), the menu or a card retry stops for 60 s.
+// It runs on the 1 kHz LPO and is stopped in deep sleep (STOPEN clear; LLS is a stop mode), so a
+// sleep of any length cannot trigger it, but a sleep that keeps waking at once soon does.
+// The Teensy core leaves it disabled with ALLOWUPDATE set, so it can be set up here.
+void watchdogStart(){
+  noInterrupts();
+  WDOG_UNLOCK = WDOG_UNLOCK_SEQ1;
+  WDOG_UNLOCK = WDOG_UNLOCK_SEQ2;
+  __asm__ volatile ("nop");
+  __asm__ volatile ("nop");
+  WDOG_TOVALH = 0;
+  WDOG_TOVALL = 60000;  // 60 s at 1 kHz
+  WDOG_PRESC = 0;       // divide by 1 (the reset value divides by 5)
+  WDOG_STCTRLH = WDOG_STCTRLH_ALLOWUPDATE | WDOG_STCTRLH_WDOGEN | WDOG_STCTRLH_WAITEN;  // LPO clock
+  interrupts();
+}
+
+void watchdogRefresh(){
+  noInterrupts();
+  WDOG_REFRESH = 0xA602;
+  WDOG_REFRESH = 0xB480;
+  interrupts();
+}
+
+// For the stops: a stopped logger stays stopped until the power is cycled
+void watchdogStop(){
+  noInterrupts();
+  WDOG_UNLOCK = WDOG_UNLOCK_SEQ1;
+  WDOG_UNLOCK = WDOG_UNLOCK_SEQ2;
+  __asm__ volatile ("nop");
+  __asm__ volatile ("nop");
+  WDOG_STCTRLH = WDOG_STCTRLH_ALLOWUPDATE;
+  interrupts();
+}
+
+// Audio watchdog: no audio written for 3 s while recording means the I2S or its DMA has
+// stopped. Restart the audio once; if that does not help, restart the logger, which resumes.
+uint32_t lastAudioMillis;
+int lastBufCount;
+boolean audioRestarted;
+
+void audioWatchStart(){
+  lastAudioMillis = millis();
+  lastBufCount = buf_count;
+  audioRestarted = 0;
+}
+
+void checkAudio(){
+  if(buf_count != lastBufCount){
+    lastBufCount = buf_count;
+    lastAudioMillis = millis();
+    if(audioRestarted) Serial.println("Audio restarted");
+    audioRestarted = 0;
+    return;
+  }
+  if(millis() - lastAudioMillis < 3000) return;
+  if(sleepDiags) reportAudioStall(!audioRestarted);  // I2S and DMA registers on serial and display
+  if(!audioRestarted){
+    Serial.println("No audio for 3 s: restarting the audio");
+    eeCount(EE_AUDIO_RESTARTS);
+    AudioInit(isf);
+    audioRestarted = 1;
+    lastAudioMillis = millis();
+  }
+  else{
+    Serial.println("Still no audio: restarting the logger");
+    restartLogger();
+  }
 }
 
 void read_myID() {
@@ -895,21 +1068,12 @@ void stopForGood(int eeFlag, const char *title, const char *detail){
   Serial.print(title);
   Serial.print(" stop ");
   Serial.println(detail);
+  watchdogStop();  // stays stopped until the power is cycled
   queue1.end();
   if(NCHAN==2) queue2.end();
   digitalWrite(hydroPowPin, LOW);
   audioSleep();
-
-  // let the card finish any operation in progress, then switch it off
-  if(sd.card()){
-    uint32_t busyStart = millis();
-    while(sd.card()->isBusy() && (millis() - busyStart < 2000)) delay(10);
-  }
-  pinMode(7, INPUT_DISABLE);   // MOSI
-  pinMode(12, INPUT_DISABLE);  // MISO
-  pinMode(14, INPUT_DISABLE);  // SCK
-  digitalWrite(chipSelect[0], LOW);
-  digitalWrite(sdPowSelect[0], LOW);
+  cardOff();
 
   display.ssd1306_command(SSD1306_DISPLAYON);
   cDisplay();
