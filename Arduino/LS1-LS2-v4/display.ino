@@ -5,8 +5,8 @@ byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
 
 float mAmpMono[9] = { 35, 37, 38, 41, 41, 48, 64, 69, 79};
-float mAmpStereo[9] = { 36, 38, 43, 47, 48, 62, 90, 100, 107};
-// stereo record power consumption 1 TB SanDisk exFAT; sleep 4.2 mA
+float mAmpStereo[9] = { 36, 38, 43, 47, 53, 65, 91, 100, 107};
+// stereo record power consumption 1 TB SanDisk exFAT
 // 8 kHz = 36 mA
 // 16 kHz = 38 mA
 // 32 kHz = 43 mA
@@ -28,7 +28,7 @@ float mAmpStereo[9] = { 36, 38, 43, 47, 48, 62, 90, 100, 107};
 // 250 kHz = 69 mA
 // 300 kHz = 79 mA
 
-// stereo record power consumption 256 GB Samsung exFAT; 14 mA sleep (2.8 mA if power down SD and disable SPI)
+// stereo record power consumption 256 GB Samsung exFAT; 14 mA sleep 
 // 8 kHz = 46 mA
 // 16 kHz = 46 mA
 // 32 kHz = 48 mA
