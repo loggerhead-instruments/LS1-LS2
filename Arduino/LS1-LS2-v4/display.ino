@@ -4,7 +4,7 @@ float mAmpSleepCardOff = 1.0; // SD Sleep set to Power off: measured 0.7 mA at 4
 byte nBatPacks = 8;
 float mAhPerBat = 12000.0; // assume 12.0Ah per battery pack; good batteries should be 14000
 
-// power consumption 1 TB SanDisk exFAT 4Vin
+// power consumption 1 TB SanDisk Extreme exFAT 4Vin
 // measured with Nordic Power Profiler II
 //                  kHz: 8  16  32 44.1 48  96 200 250 300 
 float mAmpMono[9]   = { 42, 43, 46, 47, 48, 64, 68, 75, 82};
