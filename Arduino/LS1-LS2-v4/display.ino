@@ -41,6 +41,7 @@ float mAmpStereo[9] = { 36, 38, 43, 47, 53, 65, 91, 100, 107};
 
 csd_t m_csd;
 uint32_t cardTotalMB = 0;
+uint32_t clusterBytes = 32768;  // card's cluster size, set when the card is read (512 KB on a 1 TB exFAT card)
 uint32_t powerSeconds;       // deployment length the batteries allow
 float totalSecondsMemory;    // deployment length the card allows
 
@@ -204,6 +205,7 @@ void manualSettings(){
         Serial.println(volFree);
 
         float fs = 0.000512 * volFree * sd.vol()->sectorsPerCluster();
+        clusterBytes = sd.vol()->sectorsPerCluster() * 512UL;
 
         uint32_t freeSpace = (uint32_t) fs;
         uint32_t volumeMB = uint32_t ( 0.000512 * (float) sd.card()->sectorCount());
@@ -841,9 +843,10 @@ void calcDeployment(){
   if(NCHAN==1) mAmpRec = mAmpMono[isf];
   if(NCHAN==2) mAmpRec = mAmpStereo[isf];
 
-  float fileBytes = ((float) NCHAN * 2.0 * (float) rec_dur * (float) lhi_fsamps[isf]) + 44.0;
-  
-  fileMB = (fileBytes + 32768.0) / 1000.0 / 1000.0; // add cluster size so don't underestimate fileMB
+  // A file takes whole clusters, up to almost a cluster more than its size
+  uint64_t fileBytes = (uint64_t) NCHAN * 2 * rec_dur * lhi_fsamps[isf] + 44;
+  uint64_t fileClusters = (fileBytes + clusterBytes - 1) / clusterBytes;
+  fileMB = (float) (fileClusters * clusterBytes) / 1000.0 / 1000.0;
   float dielFraction = 1.0; //diel mode decreases time spent recording, increases time in sleep
   if(recMode==MODE_DIEL){
     float dielHours, dielMinutes;

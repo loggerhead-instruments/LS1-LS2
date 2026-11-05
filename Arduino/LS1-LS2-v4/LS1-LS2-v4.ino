@@ -96,7 +96,7 @@ int chipSelect[4];
 int sdPowSelect[4];
 uint32_t freeMB[4];
 uint32_t filesPerCard[4];
-float fileMB;  // file size including a cluster, set by calcDeployment()
+float fileMB;  // space a file takes on the card (whole clusters), set by calcDeployment()
 volatile int currentCard = 0;
 boolean newCard = 0;
 
@@ -593,7 +593,7 @@ void continueRecording() {
         queue1.freeBuffer();
       }
       digitalWrite(LEDGREEN, LOW);
-      if(file.write(buffer, NREC*512)==-1) resetFunc(); //audio to .wav file
+      if(file.write(buffer, NREC*512) != NREC*512) resetFunc(); // audio to .wav file; SdFat returns 0 on a failed write
       buf_count += NREC;
     }
   }
@@ -610,7 +610,7 @@ void continueRecording() {
         queue2.freeBuffer();  // free buffer
       }
       digitalWrite(LEDGREEN, LOW);
-      if(file.write(buffer, NREC*512)==-1) resetFunc(); //audio to .wav file
+      if(file.write(buffer, NREC*512) != NREC*512) resetFunc(); // audio to .wav file; SdFat returns 0 on a failed write
       
       buf_count += NREC;
 //      if(printDiags){
