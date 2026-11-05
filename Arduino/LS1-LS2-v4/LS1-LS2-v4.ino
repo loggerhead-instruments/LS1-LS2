@@ -17,12 +17,12 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "4.50";
+char codeVersion[5] = "4.51";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 static boolean sleepDiags = 0;  // 1: bench diagnostics (diag.ino): wake log and no-audio report on USB serial; 0 for deployment
 #define MQ 100 // to be used with LHI record queue (modified local version)
 int roundSeconds = 60;//start time modulo to nearest roundSeconds
-int wakeahead = 4;  //wake from snooze to give hydrophone to power up
+int wakeahead = 7;  //wake from snooze to give hydrophone to power up
 int noDC = 0; // 0 = freezeDC offset; 1 = remove DC offset; 2 = bypass
 int NCHAN = 2;
 //*****************************************************************************************
@@ -533,7 +533,7 @@ void loop() {
         long sleepSeconds = startTime - getTeensy3Time(0) - wakeahead;
         if (sleepSeconds < 0) sleepSeconds = 0;
 
-        if(sleepSeconds >= 10){
+        if(sleepSeconds >= 30){
             time_t wakeTime = getTeensy3Time(0) + sleepSeconds;
             boolean cardSleep = sdSleep & (sleepSeconds >= SD_SLEEP_SECONDS);  // SD Sleep set to Power off
 
