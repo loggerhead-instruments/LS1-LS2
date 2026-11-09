@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- Shared by the LS1-LS2 and snap repos (tools/logger-setup.html in each): change both copies together -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -241,6 +242,7 @@ const KNOWN_KEYS = new Set(FIELDS.flatMap(f => f.keys || [f.key]));
 let port = null, reader = null, readClosed = null;
 let loggerOffset = null;   // logger time minus computer time, in seconds
 let clockSource = null;
+let deviceName = '';       // from the DEVICE line: LS1/LS2-v4 or Snap4
 let settings = null;       // last values read from the logger
 let status = null;
 let replyTimer = null;
@@ -309,6 +311,7 @@ function handleLine(line) {
   log(line);
   let m;
   if ((m = line.match(/^DEVICE (\S+) (\S+)/))) {
+    deviceName = m[1];
     $('device').textContent = m[1] + ' · firmware ' + m[2];
   } else if ((m = line.match(/^TIME (\d+) (\S+) (\S+)/))) {
     clearTimeout(replyTimer);
@@ -607,6 +610,8 @@ function buildForm() {
   const form = $('form');
   form.innerHTML = '';
   if (!settings) return;
+  // the firmware accepts up to 12 battery packs on a Snap and 8 on an LS1/LS2
+  FIELDS.find(f => f.key === 'batpacks').max = /^Snap/i.test(deviceName) ? 12 : 8;
 
   const fields = FIELDS.filter(f => (f.keys || [f.key]).every(k => k in settings));
   // settings this page does not know yet (e.g. from newer firmware) as plain numbers
