@@ -17,7 +17,7 @@
 
 //*****************************************************************************************
 
-char codeVersion[5] = "4.51";
+char codeVersion[5] = "4.53";
 static boolean printDiags = 0;  // 1: serial print diagnostics; 0: no diagnostics
 static boolean sleepDiags = 0;  // 1: bench diagnostics (diag.ino): wake log and no-audio report on USB serial; 0 for deployment
 #define MQ 100 // to be used with LHI record queue (modified local version)
