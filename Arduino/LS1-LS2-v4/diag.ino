@@ -25,7 +25,7 @@ void wakeLogAdd(int who, long secs){
   wakeLogSecs[i] = secs;
   wakeLogWho[i] = who;
   wakeLogClk[i] = clockSource;
-  wakeLogPin[i] = digitalRead(DS3231_INT_PIN);
+  wakeLogPin[i] = 1;  // v3.x boards: DS3231 INT is not connected to a pin (16 is the LED)
   if(readDSRegs(reg, 16) == 16){
     wakeLogDs[i][0] = reg[0];
     wakeLogDs[i][1] = reg[14];

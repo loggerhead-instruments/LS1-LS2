@@ -38,7 +38,7 @@ void checkSerialCommands(){
         reportTime();
         break;
       case 'G':
-        Serial.print("DEVICE LS1/LS2-v4 ");
+        Serial.print("DEVICE LS1/LS2-v3 ");
         Serial.println(codeVersion);
         reportTime();
         reportSettings();

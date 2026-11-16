@@ -1,9 +1,10 @@
 //
 // LS1 and LS2 acoustic recorders
-// THIS VERSION ONLY WORKS WITH 1 CARD with Version 4 LS1/L2 Boards
+// THIS VERSION ONLY WORKS WITH 1 CARD with Version 3.x LS1/L2 Boards
 //
 // Loggerhead Instruments
-// 2026 For use with LS1-LS2 Version 4 ONLY
+// 2026 Branch 3.x: the v4 firmware with the v3.2 pins (card power 17, LED 16, battery
+// voltage on A14 with the 3.3 V reference). The main branch is for Version 4 boards.
 // David Mann 
 
 // 
@@ -84,14 +85,13 @@ const int UP = 4;
 const int DOWN = 3;
 const int SELECT = 8;
 const int hydroPowPin = 2;
-const int vSense = 21; 
-#define LEDGREEN 17
+const int vSense = A14;  // v3.x boards
+#define LEDGREEN 16      // v3.x boards
 
 // microSD chip select pins
 #define CS1 10
-#define SDPOW1 20
+#define SDPOW1 17  // v3.x boards (15, 20 and 21 are the chip selects of card slots 2-4, not used)
 #define SGTL_EN 6
-#define DS3231_INT_PIN 16
 int chipSelect[4];
 int sdPowSelect[4];
 uint32_t freeMB[4];
@@ -282,9 +282,8 @@ void setup() {
   // Pins
   pinMode(LEDGREEN, OUTPUT);
   digitalWrite(LEDGREEN, HIGH);
-  pinMode(DS3231_INT_PIN, INPUT_PULLUP); // DS3231 INT, not used to wake; read for diagnostics
   pinMode(vSense, INPUT);
-  analogReference(INTERNAL);
+  analogReference(DEFAULT);  // v3.x boards: 3.3 V reference
   pinMode(hydroPowPin, OUTPUT);
   digitalWrite(hydroPowPin, HIGH);
   pinMode(SDPOW1, OUTPUT);
@@ -1019,7 +1018,7 @@ float readVoltage(){
     voltage += (float) analogRead(vSense);
    }
    // Serial.println(voltage / 1000.0);
-   voltage = (voltage / 173868.0);   // experimentally determined....it varies ~5% each time powered on
+   voltage = 7.27 * (voltage / 1000.0) / 1024.0;   // v3.x boards: scale from the 3.20 firmware, based on measurements
    return voltage;
 }
 
